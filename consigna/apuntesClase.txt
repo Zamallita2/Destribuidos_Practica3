@@ -1,0 +1,72 @@
+Práctica 3
+
+200 entradas por segundo a procesar
+240.000 en 15 minutos
+
+Un sistema distribuido es facil de construir, hasta que dos procesos quieren cambiar el mismo dato al mismo tiempo.
+
+SINCRONIZACIÓN DE PROCESOS DISTRIBUIDOS: Múltiples procesos trabajando simultáneamente sin conflictos. Correcta sincronización entre procesos y nodos que permitan ganar coherencia, orden y funcionamiento dentro de un sistema complejo.
+
+Titulo: Reserva, venta y anulación de boletos aéreos 
+
+Ha decidido implementar un sistema de reservas en linea basado en una arquitectura distribuida
+
+El sistema estara conformado por 3 servidores distribuidos geograficamente (diferente franja horaria), cada uno encargado de procesar 
+
+
+
+-Hay vuelos que salen en una fecha y llegan en otra fecha por el tema 
+
+-Uno esta en berlin
+-Uno en beijing
+-Otro en punata, vallehermoso, tropico 
+
+
+En los nodos la doble fecha significa que se va y se vuelve
+Hay otros que solo van
+Es el algoritmo de distra que se encarga de la ruta mas corta. Pero la clave es que cumpla los parametros
+crear una matriz de ciudades y vender pasajes
+
+Usted esta en tokio y quiere ir a atlanta (El menor tiempo o la menor plata. Uno de esos parametros tiene que seguir) 
+
+El docente pasara una matriz:
+Algunos estan en blanco (Significa que no hay vuelos) 
+la columna sera de tal pais a fila (otro pais)
+
+La matriz que nos pasara se cambiara y sera otros montos y otros destinos
+
+Quiero ir de atlanta a georgia. Quieres el menor tiempo o el boleto mas barato 
+
+Aerolineas tiene 4 modelos de avion pero no dice los lotes que se tiene de cada uno 
+
+
+El problema esta en las horas. y decir donde esta el avion en ese punto del tiempo.
+
+Que horarios vamos a manejar?
+
+Dato: Bdd programada con fecha origen destino
+
+
+El usuario tendra un combobox donde dira donde esta para tomar la hora de ese lugar 
+y decirle de donde quiero viajar a donde quiero viajar 
+
+Las 3 bdds tienen que estar sincronizadas todo el tiempo 
+
+imprimir un pdf de boleto o wallet (nivel pro) 
+
+
+No hay login
+
+Es directo. vienes compras y ya esta
+
+Backend y frontend
+
+Cuando un boleto pasa de vendido a libre se tiene una ventana de 15 min antes de cambiar todo en la bdd porque 
+
+Se debe poder seguir vendiendo pasajes aunque las bdds conectadas esten en pausa de comunicacion 
+
+Sistema internacional, tiene que dejar ser unicode 
+
+En un sistema distribuido cada nodo opera con su propio reloj.
+
+Un sistema distribuido no puede garantizar simultáneamente 3 propiedades al mismo tiempo cuando existe una particion de red 

@@ -157,6 +157,8 @@ func ReservarAsiento(c *gin.Context) {
 
 	// Update Asiento State
 	asiento.Estado = payload.EstadoDeseado
+	asiento.LamportClock = services.GlobalLamportClock.Tick()
+	
 	if region == "Asia" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("asientos")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
@@ -164,7 +166,7 @@ func ReservarAsiento(c *gin.Context) {
 	} else if dbConn != nil {
 		dbConn.Save(&asiento)
 	}
-	go services.SendSyncEvent("UPDATE", "Asiento", &asiento)
+	go services.SendSyncEvent("UPDATE", "Asiento", &asiento, asiento.LamportClock)
 
 	// Create Boleto
 	nuevoBoleto := models.Boleto{
@@ -178,6 +180,8 @@ func ReservarAsiento(c *gin.Context) {
 		Estado:         payload.EstadoDeseado,
 	}
 
+	nuevoBoleto.LamportClock = services.GlobalLamportClock.Tick()
+	
 	if region == "Asia" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("boletos")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
@@ -189,7 +193,7 @@ func ReservarAsiento(c *gin.Context) {
 	} else if dbConn != nil {
 		dbConn.Create(&nuevoBoleto)
 	}
-	go services.SendSyncEvent("CREATE", "Boleto", &nuevoBoleto)
+	go services.SendSyncEvent("CREATE", "Boleto", &nuevoBoleto, nuevoBoleto.LamportClock)
 
 	c.JSON(http.StatusOK, nuevoBoleto)
 }
@@ -233,7 +237,10 @@ func CancelarReserva(c *gin.Context) {
 
 	// Cambiar Boleto a Anulado
 	boleto.Estado = "ANNULLED"
+	boleto.LamportClock = services.GlobalLamportClock.Tick()
+	
 	asiento.Estado = "AVAILABLE"
+	asiento.LamportClock = services.GlobalLamportClock.Tick()
 
 	if region == "Asia" && db.MongoDatabase != nil {
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
@@ -244,8 +251,8 @@ func CancelarReserva(c *gin.Context) {
 		dbConn.Save(&asiento)
 	}
 
-	go services.SendSyncEvent("UPDATE", "Boleto", &boleto)
-	go services.SendSyncEvent("UPDATE", "Asiento", &asiento)
+	go services.SendSyncEvent("UPDATE", "Boleto", &boleto, boleto.LamportClock)
+	go services.SendSyncEvent("UPDATE", "Asiento", &asiento, asiento.LamportClock)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Reserva cancelada. El asiento procesará disponibilidad en los ecosistemas (retraso 15s) debido a política de reembolso."})
 }
@@ -316,6 +323,7 @@ func UpdateEstadoBoleto(c *gin.Context) {
 	}
 
 	boleto.Estado = payload.Estado
+	boleto.LamportClock = services.GlobalLamportClock.Tick()
 
 	if region == "Asia" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("boletos")
@@ -325,6 +333,6 @@ func UpdateEstadoBoleto(c *gin.Context) {
 		dbConn.Save(&boleto)
 	}
 
-	go services.SendSyncEvent("UPDATE", "Boleto", &boleto)
+	go services.SendSyncEvent("UPDATE", "Boleto", &boleto, boleto.LamportClock)
 	c.JSON(http.StatusOK, boleto)
 }

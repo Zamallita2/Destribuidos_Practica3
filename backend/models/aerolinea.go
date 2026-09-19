@@ -26,11 +26,12 @@ type Puerta struct {
 }
 
 type Asiento struct {
-	ID      uint   `gorm:"primaryKey" json:"id" bson:"id"`
-	Codigo  string `json:"codigo" bson:"codigo"`
-	IDAvion uint   `json:"id_avion" bson:"id_avion"`
-	Estado  string `json:"estado" bson:"estado"`
-	Clase   string `json:"clase" bson:"clase"`
+	ID           uint   `gorm:"primaryKey" json:"id" bson:"id"`
+	Codigo       string `json:"codigo" bson:"codigo"`
+	IDAvion      uint   `json:"id_avion" bson:"id_avion"`
+	Estado       string `json:"estado" bson:"estado"`
+	Clase        string `json:"clase" bson:"clase"`
+	LamportClock int64  `json:"lamport_clock" bson:"lamport_clock"`
 }
 
 type EstadoVuelo struct {
@@ -51,6 +52,7 @@ type Vuelo struct {
 	SalidaReal        int64 `json:"salida_real" bson:"salida_real"`
 	FechaLlegada      int64 `json:"fecha_llegada" bson:"fecha_llegada"`
 	FechaSalida       int64 `json:"fecha_salida" bson:"fecha_salida"`
+	LamportClock      int64 `json:"lamport_clock" bson:"lamport_clock"`
 }
 
 type Boleto struct {
@@ -63,6 +65,7 @@ type Boleto struct {
 	TiempoDeViaje int     `json:"tiempo_de_viaje" bson:"tiempo_de_viaje"`
 	Pasaporte     string  `json:"pasaporte" bson:"pasaporte"`
 	Estado        string  `json:"estado" bson:"estado"`
+	LamportClock  int64   `json:"lamport_clock" bson:"lamport_clock"`
 }
 
 type Precios struct {

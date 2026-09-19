@@ -71,12 +71,66 @@ CREATE TABLE IF NOT EXISTS detalles_vuelos (
 );
 
 -- Basic data
-INSERT INTO estados_vuelo (nombre) VALUES ('SCHEDULED'), ('BOARDING'), ('DEPARTED'), ('IN_FLIGHT'), ('LANDED'), ('ARRIVED') ON CONFLICT DO NOTHING;
+INSERT INTO estados_vuelo (nombre) VALUES 
+('SCHEDULED'), ('BOARDING'), ('DEPARTED'), ('IN_FLIGHT'), ('LANDED'), ('ARRIVED'), ('CANCELLED'), ('DELAYED')
+ON CONFLICT DO NOTHING;
 
+-- 4 modelos de avion, 50 instancias fisicas (aircraft_id 1-50 del CSV)
+-- IDs 1-12: A380, 13-25: Boeing 777, 26-38: A350, 39-50: Boeing 787
 INSERT INTO aviones (nombre, asientos_regular, asientos_vip, fabricante) VALUES 
-('Airbus A380-800', 439, 10, 'Airbus'), 
+-- A380 instances (IDs 1-12)
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'),
+-- Boeing 777 instances (IDs 13-25)
 ('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'),
+-- A350 instances (IDs 26-38)
 ('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'),
+-- Boeing 787 instances (IDs 39-50)
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
 ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing')
 ON CONFLICT DO NOTHING;
 
@@ -99,10 +153,12 @@ INSERT INTO ciudades (codigo, pais, region) VALUES
 ('SAO', 'Brasil', 'America')
 ON CONFLICT DO NOTHING;
 
--- Puertas basicas
+-- Puertas en formato G1-G30 (igual al CSV del dataset)
 INSERT INTO puertas (puerta, id_ciudad) VALUES 
-('Gate A1', 1), ('Gate B2', 2), ('Gate C1', 3), ('Gate D4', 4),
-('Gate E1', 5), ('Gate A2', 6), ('Gate B1', 7), ('Gate C2', 8),
-('Gate D1', 9), ('Gate E2', 10), ('Gate A3', 11), ('Gate B3', 12),
-('Gate C3', 13), ('Gate D2', 14), ('Gate E3', 15)
+('G1',  1), ('G2',  2), ('G3',  3), ('G4',  4), ('G5',  5),
+('G6',  6), ('G7',  7), ('G8',  8), ('G9',  9), ('G10', 10),
+('G11', 11), ('G12', 12), ('G13', 13), ('G14', 14), ('G15', 15),
+('G16', 1), ('G17', 2), ('G18', 3), ('G19', 4), ('G20', 5),
+('G21', 6), ('G22', 7), ('G23', 8), ('G24', 9), ('G25', 10),
+('G26', 11), ('G27', 12), ('G28', 13), ('G29', 14), ('G30', 15)
 ON CONFLICT DO NOTHING;

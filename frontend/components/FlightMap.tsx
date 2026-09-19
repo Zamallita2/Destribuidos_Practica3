@@ -71,7 +71,7 @@ export default function FlightMap() {
     };
 
     fetchVuelos();
-    const interval = setInterval(fetchVuelos, 5000);
+    const interval = setInterval(fetchVuelos, 60000); // Aumentado a 60s para evitar lag
     return () => clearInterval(interval);
   }, []);
 

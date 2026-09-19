@@ -163,6 +163,8 @@ func CreateVuelo(c *gin.Context) {
 	}
 	dbConn, region := db.GetDBForCountry(tag)
 	
+	nVuelo.LamportClock = services.GlobalLamportClock.Tick()
+
 	if region == "Asia" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("vuelos")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
@@ -180,7 +182,7 @@ func CreateVuelo(c *gin.Context) {
 	}
 
 	// Disparar sincronización
-	go services.SendSyncEvent("CREATE", "Vuelo", &nVuelo)
+	go services.SendSyncEvent("CREATE", "Vuelo", &nVuelo, nVuelo.LamportClock)
 
 	c.JSON(http.StatusOK, nVuelo)
 }
@@ -202,6 +204,7 @@ func UpdateEstadoVuelo(c *gin.Context) {
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		coll.FindOne(ctx, bson.M{"id": uint(id)}).Decode(&vuelo)
 		vuelo.IDEstadoVuelo = uint(idEstado)
+		vuelo.LamportClock = services.GlobalLamportClock.Tick()
 		coll.ReplaceOne(ctx, bson.M{"id": uint(id)}, vuelo)
 	} else if dbConn != nil {
 		if err := dbConn.First(&vuelo, id).Error; err != nil {
@@ -209,9 +212,10 @@ func UpdateEstadoVuelo(c *gin.Context) {
 			return
 		}
 		vuelo.IDEstadoVuelo = uint(idEstado)
+		vuelo.LamportClock = services.GlobalLamportClock.Tick()
 		dbConn.Save(&vuelo)
 	}
 
-	go services.SendSyncEvent("UPDATE", "Vuelo", &vuelo)
+	go services.SendSyncEvent("UPDATE", "Vuelo", &vuelo, vuelo.LamportClock)
 	c.JSON(http.StatusOK, vuelo)
 }

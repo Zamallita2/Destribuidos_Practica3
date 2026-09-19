@@ -2,18 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
+	"airres-api/data"
 	"airres-api/db"
 	"airres-api/models"
 	"airres-api/routes"
 	"airres-api/services"
-
-	"encoding/json"
-	"os"
-	"path/filepath"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -21,6 +21,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 )
+
 
 func main() {
 	// Initialize databases
@@ -44,6 +45,15 @@ func main() {
 
 	seedAsientos(db.PGAmerica)
 	seedAsientos(db.PGEuropaAsia)
+
+	// Seed Flights from CSV dataset (auto-import, skips if already loaded)
+	csvPath := data.CSVPath()
+	if csvPath != "" {
+		data.SeedFlightsFromCSV(db.PGAmerica, csvPath)
+		data.SeedFlightsFromCSV(db.PGEuropaAsia, csvPath)
+	} else {
+		log.Println("[Seed Flights] WARNING: Dataset CSV not found. Place flights.csv in backend/data/ or dataset/ folder.")
+	}
 
 	// Seed MongoDB matrices
 	seedMongoMatrices()
@@ -258,7 +268,7 @@ func syncPGSeatsToMongo() {
 	}
 
 	coll := db.MongoDatabase.Collection("asientos")
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx := context.Background()
 	
 	log.Printf("[Seed Mongo] Syncing %d seats from PG to Mongo with correct IDs...", len(seats))
 	

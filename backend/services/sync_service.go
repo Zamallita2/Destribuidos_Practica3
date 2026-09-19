@@ -16,9 +16,10 @@ import (
 
 // SyncEvent represents a database action to be synchronized
 type SyncEvent struct {
-	Action string      // CREATE, UPDATE, DELETE
-	Entity string      // avion, ciudad, vuelo, etc.
-	Data   interface{} // The struct itself
+	Action       string      // CREATE, UPDATE, DELETE
+	Entity       string      // avion, ciudad, vuelo, etc.
+	Data         interface{} // The struct itself
+	LamportClock int64       // Lamport timestamp for conflict resolution
 }
 
 var SyncChannel = make(chan SyncEvent, 100)
@@ -61,8 +62,33 @@ func StartSyncService() {
 
 // syncToPostgres performs an Upsert logic or Save logic based on the action
 func syncToPostgres(pgDb *gorm.DB, event SyncEvent, node string) {
+	GlobalLamportClock.UpdateClock(event.LamportClock)
+
 	// GORM's Save performs an UPSERT (updates if exists, creates if not)
 	if event.Action == "CREATE" || event.Action == "UPDATE" {
+		incomingClock := event.LamportClock
+		id := getIDFromData(event.Data)
+		
+		if incomingClock > 0 && id != nil {
+			var existingClock int64 = -1
+			switch event.Entity {
+			case "Vuelo":
+				var v models.Vuelo
+				if pgDb.First(&v, id).Error == nil { existingClock = v.LamportClock }
+			case "Boleto":
+				var b models.Boleto
+				if pgDb.First(&b, id).Error == nil { existingClock = b.LamportClock }
+			case "Asiento":
+				var a models.Asiento
+				if pgDb.First(&a, id).Error == nil { existingClock = a.LamportClock }
+			}
+			
+			if existingClock >= incomingClock {
+				log.Printf("[Sync Service %s] Lamport Conflict Resolved: Rejected stale %s update (Incoming: %d, Existing: %d)\n", node, event.Entity, incomingClock, existingClock)
+				return
+			}
+		}
+
 		err := pgDb.Save(event.Data).Error
 		if err != nil {
 			log.Printf("[Sync Service] Error syncing to DB %s: %v\n", node, err)
@@ -99,6 +125,8 @@ func syncToMongo(event SyncEvent) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	GlobalLamportClock.UpdateClock(event.LamportClock)
+
 	if event.Action == "CREATE" || event.Action == "UPDATE" {
 		var filter bson.M
 
@@ -131,6 +159,24 @@ func syncToMongo(event SyncEvent) {
 			filter = bson.M{"id": getIDFromData(event.Data)}
 		}
 
+		// Lamport conflict resolution for MongoDB
+		incomingClock := event.LamportClock
+		if incomingClock > 0 {
+			var result bson.M
+			if err := coll.FindOne(ctx, filter).Decode(&result); err == nil {
+				var existingClock int64 = -1
+				if lc, ok := result["lamport_clock"].(int64); ok {
+					existingClock = lc
+				} else if lc, ok := result["lamport_clock"].(int32); ok {
+					existingClock = int64(lc)
+				}
+				if existingClock >= incomingClock {
+					log.Printf("[Sync Service Mongo] Lamport Conflict Resolved: Rejected stale %s update (Incoming: %d, Existing: %d)\n", event.Entity, incomingClock, existingClock)
+					return
+				}
+			}
+		}
+
 		opts := options.Replace().SetUpsert(true)
 		_, err := coll.ReplaceOne(ctx, filter, event.Data, opts)
 		if err != nil {
@@ -158,11 +204,21 @@ func getIDFromData(data interface{}) interface{} {
 	return nil
 }
 
+// getLamportClockFromData is a helper to extract the LamportClock from known models
+func getLamportClockFromData(data interface{}) int64 {
+	switch v := data.(type) {
+	case *models.Vuelo: return v.LamportClock
+	case *models.Boleto: return v.LamportClock
+	case *models.Asiento: return v.LamportClock
+	}
+	return 0
+}
+
 // SendSyncEvent pushes a new event into the background channel
-func SendSyncEvent(action, entity string, data interface{}) {
+func SendSyncEvent(action, entity string, data interface{}, clock int64) {
 	// Non-blocking send
 	select {
-	case SyncChannel <- SyncEvent{Action: action, Entity: entity, Data: data}:
+	case SyncChannel <- SyncEvent{Action: action, Entity: entity, Data: data, LamportClock: clock}:
 	default:
 		log.Println("[Sync Service] WARNING: Sync channel full, event dropped")
 	}
