@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // GetAllVuelos returns all flights with their status
@@ -29,10 +30,13 @@ func GetAllVuelos(c *gin.Context) {
 		coll := db.MongoDatabase.Collection("vuelos")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cursor, _ := coll.Find(ctx, bson.M{})
+		
+		findOptions := options.Find()
+		findOptions.SetLimit(100)
+		cursor, _ := coll.Find(ctx, bson.M{}, findOptions)
 		cursor.All(ctx, &vuelos)
 	} else if dbConn != nil {
-		dbConn.Find(&vuelos)
+		dbConn.Limit(100).Find(&vuelos)
 	} else {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "No database connection for region"})
 		return
