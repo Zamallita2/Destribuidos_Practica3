@@ -113,6 +113,21 @@ func ReservarAsiento(c *gin.Context) {
 	tag := c.GetHeader("X-User-Country")
 	dbConn, region := db.GetDBForCountry(tag)
 
+	// Validate flight status: Cannot buy/reserve if flight state >= BOARDING (2)
+	var vuelo models.Vuelo
+	if region == "Asia" && db.MongoDatabase != nil {
+		coll := db.MongoDatabase.Collection("vuelos")
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		coll.FindOne(ctx, bson.M{"id": payload.IDVuelo}).Decode(&vuelo)
+	} else if dbConn != nil {
+		dbConn.First(&vuelo, payload.IDVuelo)
+	}
+
+	if vuelo.IDEstadoVuelo >= 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No se pueden comprar ni reservar boletos para un vuelo que ya está en proceso de abordaje, despegue o finalizado."})
+		return
+	}
+
 	// Check if seat is already taken FOR THIS SPECIFIC FLIGHT
 	var existingBoleto models.Boleto
 	if region == "Asia" && db.MongoDatabase != nil {
@@ -184,6 +199,21 @@ func CancelarReserva(c *gin.Context) {
 
 	if boleto.IDBoleto == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Boleto no encontrado"})
+		return
+	}
+
+	// Validate flight status for cancellation: Cannot cancel if flight state >= BOARDING (2)
+	var vuelo models.Vuelo
+	if region == "Asia" && db.MongoDatabase != nil {
+		coll := db.MongoDatabase.Collection("vuelos")
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		coll.FindOne(ctx, bson.M{"id": boleto.IDVuelo}).Decode(&vuelo)
+	} else if dbConn != nil {
+		dbConn.First(&vuelo, boleto.IDVuelo)
+	}
+
+	if vuelo.IDEstadoVuelo >= 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No se puede cancelar una reserva cuando el vuelo ya está en abordaje, despegue o finalizado."})
 		return
 	}
 
@@ -265,6 +295,21 @@ func UpdateEstadoBoleto(c *gin.Context) {
 
 	if boleto.IDBoleto == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Boleto no encontrado"})
+		return
+	}
+
+	// Validate flight status for ticket state change
+	var vuelo models.Vuelo
+	if region == "Asia" && db.MongoDatabase != nil {
+		coll := db.MongoDatabase.Collection("vuelos")
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		coll.FindOne(ctx, bson.M{"id": boleto.IDVuelo}).Decode(&vuelo)
+	} else if dbConn != nil {
+		dbConn.First(&vuelo, boleto.IDVuelo)
+	}
+
+	if vuelo.IDEstadoVuelo >= 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No se puede modificar o anular el boleto porque el vuelo ya está en abordaje, despegue o finalizado."})
 		return
 	}
 
