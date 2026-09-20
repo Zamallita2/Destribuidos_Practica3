@@ -130,28 +130,6 @@ func syncToMongo(event SyncEvent) {
 	if event.Action == "CREATE" || event.Action == "UPDATE" {
 		var filter bson.M
 
-		// For Asiento, we use codigo+id_avion as secondary key for robustness, but we still ensure 'id' is set.
-		if event.Entity == "Asiento" {
-			if a, ok := event.Data.(*models.Asiento); ok {
-				filter = bson.M{"codigo": a.Codigo, "id_avion": a.IDAvion}
-				update := bson.M{"$set": bson.M{
-					"id":       a.ID,
-					"codigo":   a.Codigo,
-					"id_avion": a.IDAvion,
-					"estado":   a.Estado,
-					"clase":    a.Clase,
-				}}
-				opts := options.Update().SetUpsert(true)
-				_, err := coll.UpdateOne(ctx, filter, update, opts)
-				if err != nil {
-					log.Printf("[Sync Service] Error syncing Asiento to Mongo: %v\n", err)
-				} else {
-					log.Printf("[Sync Service] Synced Asiento %d (%s) -> %s to MongoDB\n", a.ID, a.Codigo, a.Estado)
-				}
-				return
-			}
-		}
-
 		// For Boleto use id_boleto, for everything else use id
 		if event.Entity == "Boleto" {
 			filter = bson.M{"id_boleto": getIDFromData(event.Data)}

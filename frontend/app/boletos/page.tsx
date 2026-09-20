@@ -275,7 +275,7 @@ export default function Boletos() {
                     <div className="grid grid-cols-4 gap-x-3 gap-y-4 mb-10">
                       {asientos.filter((s:any) => s.clase === 'VIP').map((seat:any) => (
                         <button 
-                          key={seat.id}
+                          key={`${selectedVuelo?.id}-${seat.id}-${seat.codigo}`}
                           onClick={() => {
                             setSelectedSeat(seat);
                             if (seat.estado !== 'AVAILABLE') {
@@ -301,7 +301,7 @@ export default function Boletos() {
                       {asientos.filter((s:any) => s.clase === 'REGULAR').map((seat:any, idx) => {
                         const seatElement = (
                           <button 
-                            key={seat.id}
+                            key={`${selectedVuelo?.id}-${seat.id}-${seat.codigo}`}
                             onClick={() => {
                               setSelectedSeat(seat);
                               if (seat.estado !== 'AVAILABLE') {
