@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"log"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +22,7 @@ type SyncEvent struct {
 	Entity       string      // avion, ciudad, vuelo, etc.
 	Data         interface{} // The struct itself
 	LamportClock int64       // Lamport timestamp for conflict resolution
+	VectorClock  string      // Vector clock for advanced conflict resolution
 }
 
 var SyncChannel = make(chan SyncEvent, 100)
@@ -37,8 +40,14 @@ func StartSyncService() {
 			// Assuming we track the previous state or we just delay ANY transition TO AVAILABLE that implies a refund
 			// For this simulation, if we receive an AVAILABLE seat event, we assume it's a refund and wait 15 sec
 			if ok && asiento.Estado == "AVAILABLE" {
-				log.Println("[Sync Service] Latency detected: Reembolso de tarjeta de crédito en proceso. Esperando 15s...")
-				time.Sleep(15 * time.Second)
+				delayMins := 15
+				if valStr := os.Getenv("REFUND_DELAY_MINUTES"); valStr != "" {
+					if val, err := strconv.Atoi(valStr); err == nil {
+						delayMins = val
+					}
+				}
+				log.Printf("[Sync Service] Latency detected: Reembolso de tarjeta de crédito en proceso. Esperando %d minutos...", delayMins)
+				time.Sleep(time.Duration(delayMins) * time.Minute)
 				log.Println("[Sync Service] Reembolso confirmado. Propagando actualización AVAILABLE de asiento...")
 			}
 		}
@@ -66,25 +75,36 @@ func syncToPostgres(pgDb *gorm.DB, event SyncEvent, node string) {
 
 	// GORM's Save performs an UPSERT (updates if exists, creates if not)
 	if event.Action == "CREATE" || event.Action == "UPDATE" {
+		UpdateVectorClock(event.VectorClock)
 		incomingClock := event.LamportClock
+		incomingVector := event.VectorClock
 		id := getIDFromData(event.Data)
 		
 		if incomingClock > 0 && id != nil {
 			var existingClock int64 = -1
+			var existingVector string = ""
 			switch event.Entity {
 			case "Vuelo":
 				var v models.Vuelo
-				if pgDb.First(&v, id).Error == nil { existingClock = v.LamportClock }
+				if pgDb.First(&v, id).Error == nil { existingClock = v.LamportClock; existingVector = v.VectorClock }
 			case "Boleto":
 				var b models.Boleto
-				if pgDb.First(&b, id).Error == nil { existingClock = b.LamportClock }
+				if pgDb.First(&b, id).Error == nil { existingClock = b.LamportClock; existingVector = b.VectorClock }
 			case "Asiento":
 				var a models.Asiento
-				if pgDb.First(&a, id).Error == nil { existingClock = a.LamportClock }
+				if pgDb.First(&a, id).Error == nil { existingClock = a.LamportClock; existingVector = a.VectorClock }
 			}
 			
-			if existingClock >= incomingClock {
-				log.Printf("[Sync Service %s] Lamport Conflict Resolved: Rejected stale %s update (Incoming: %d, Existing: %d)\n", node, event.Entity, incomingClock, existingClock)
+			// Resolve using Vector Clock first, fallback to Lamport Clock
+			isDominant := false
+			if incomingVector != "" && existingVector != "" {
+				isDominant = IsVectorDominant(incomingVector, existingVector)
+			} else {
+				isDominant = incomingClock > existingClock
+			}
+
+			if !isDominant {
+				log.Printf("[Sync Service %s] Conflict Resolved: Rejected stale %s update\n", node, event.Entity)
 				return
 			}
 		}
@@ -128,28 +148,48 @@ func syncToMongo(event SyncEvent) {
 	GlobalLamportClock.UpdateClock(event.LamportClock)
 
 	if event.Action == "CREATE" || event.Action == "UPDATE" {
-		var filter bson.M
+		UpdateVectorClock(event.VectorClock)
+		incomingClock := event.LamportClock
+		incomingVector := event.VectorClock
+		id := getIDFromData(event.Data)
 
-		// For Boleto use id_boleto, for everything else use id
+		var filter bson.M
 		if event.Entity == "Boleto" {
-			filter = bson.M{"id_boleto": getIDFromData(event.Data)}
+			filter = bson.M{"id_boleto": id}
 		} else {
-			filter = bson.M{"id": getIDFromData(event.Data)}
+			filter = bson.M{"id": id}
 		}
 
-		// Lamport conflict resolution for MongoDB
-		incomingClock := event.LamportClock
-		if incomingClock > 0 {
-			var result bson.M
+		if incomingClock > 0 && id != nil {
+			var existingClock int64 = -1
+			var existingVector string = ""
+			
+			var result map[string]interface{}
 			if err := coll.FindOne(ctx, filter).Decode(&result); err == nil {
-				var existingClock int64 = -1
-				if lc, ok := result["lamport_clock"].(int64); ok {
-					existingClock = lc
-				} else if lc, ok := result["lamport_clock"].(int32); ok {
-					existingClock = int64(lc)
+				if val, ok := result["lamport_clock"]; ok {
+					switch v := val.(type) {
+					case int32: existingClock = int64(v)
+					case int64: existingClock = v
+					case float64: existingClock = int64(v)
+					}
 				}
-				if existingClock >= incomingClock {
-					log.Printf("[Sync Service Mongo] Lamport Conflict Resolved: Rejected stale %s update (Incoming: %d, Existing: %d)\n", event.Entity, incomingClock, existingClock)
+				if val, ok := result["vector_clock"]; ok {
+					if v, isStr := val.(string); isStr {
+						existingVector = v
+					}
+				}
+			}
+
+			isDominant := false
+			if incomingVector != "" && existingVector != "" {
+				isDominant = IsVectorDominant(incomingVector, existingVector)
+			} else {
+				isDominant = incomingClock > existingClock
+			}
+
+			if !isDominant {
+				if existingClock != 0 {
+					log.Printf("[Sync Service Mongo] Conflict Resolved: Rejected stale %s update\n", event.Entity)
 					return
 				}
 			}
@@ -163,7 +203,12 @@ func syncToMongo(event SyncEvent) {
 		}
 		log.Printf("[Sync Service] Successfully synced %s to MongoDB Asia\n", event.Entity)
 	} else if event.Action == "DELETE" {
-		filter := bson.M{"id": getIDFromData(event.Data)}
+		var filter bson.M
+		if event.Entity == "Boleto" {
+			filter = bson.M{"id_boleto": getIDFromData(event.Data)}
+		} else {
+			filter = bson.M{"id": getIDFromData(event.Data)}
+		}
 		coll.DeleteOne(ctx, filter)
 	}
 }
@@ -193,11 +238,11 @@ func getLamportClockFromData(data interface{}) int64 {
 }
 
 // SendSyncEvent pushes a new event into the background channel
-func SendSyncEvent(action, entity string, data interface{}, clock int64) {
-	// Non-blocking send
+func SendSyncEvent(action, entity string, data interface{}, clock int64, vclock string) {
 	select {
-	case SyncChannel <- SyncEvent{Action: action, Entity: entity, Data: data, LamportClock: clock}:
+	case SyncChannel <- SyncEvent{Action: action, Entity: entity, Data: data, LamportClock: clock, VectorClock: vclock}:
+		log.Printf("[Sync Service] Enqueued %s event for %s (Lamport: %d, Vector: %s)\n", action, entity, clock, vclock)
 	default:
-		log.Println("[Sync Service] WARNING: Sync channel full, event dropped")
+		log.Printf("[Sync Service] WARNING: Sync channel full, dropped %s event for %s\n", action, entity)
 	}
 }

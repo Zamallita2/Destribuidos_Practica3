@@ -32,6 +32,7 @@ type Asiento struct {
 	Estado       string `json:"estado" bson:"estado"`
 	Clase        string `json:"clase" bson:"clase"`
 	LamportClock int64  `json:"lamport_clock" bson:"lamport_clock"`
+	VectorClock  string `json:"vector_clock" bson:"vector_clock"`
 }
 
 type EstadoVuelo struct {
@@ -53,6 +54,7 @@ type Vuelo struct {
 	FechaLlegada      int64 `json:"fecha_llegada" bson:"fecha_llegada"`
 	FechaSalida       int64 `json:"fecha_salida" bson:"fecha_salida"`
 	LamportClock      int64 `json:"lamport_clock" bson:"lamport_clock"`
+	VectorClock       string `json:"vector_clock" bson:"vector_clock"`
 }
 
 type Boleto struct {
@@ -61,11 +63,13 @@ type Boleto struct {
 	EmailPasajero string `json:"email_pasajero" bson:"email_pasajero"`
 	IDVuelo       uint    `json:"id_vuelo" bson:"id_vuelo"`
 	IDAsiento     uint    `json:"id_asiento" bson:"id_asiento"`
+	Clase         string  `json:"clase" bson:"clase"`
 	Costo         float64 `json:"costo" bson:"costo"`
 	TiempoDeViaje int     `json:"tiempo_de_viaje" bson:"tiempo_de_viaje"`
 	Pasaporte     string  `json:"pasaporte" bson:"pasaporte"`
 	Estado        string  `json:"estado" bson:"estado"`
 	LamportClock  int64   `json:"lamport_clock" bson:"lamport_clock"`
+	VectorClock   string  `json:"vector_clock" bson:"vector_clock"`
 }
 
 type Precios struct {

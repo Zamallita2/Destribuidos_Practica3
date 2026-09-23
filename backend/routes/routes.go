@@ -43,5 +43,7 @@ func SetupRoutes(r *gin.Engine) {
 
 	// Sugerencias Dijkstra
 	api.GET("/sugerencias/:criterio", handlers.GetSugerencias)
+	
+	// Agente Viajero (TSP) - Hamilton Path
+	api.POST("/tsp", handlers.GetTSPRoute)
 }
-

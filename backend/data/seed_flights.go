@@ -2,10 +2,12 @@ package data
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,20 +29,13 @@ var statusMap = map[string]uint{
 	"DELAYED":   8,
 }
 
-// aircraftModelMap maps aircraft_id (1-50) to one of the 4 plane model IDs (1-4)
-// Distributes: 1-12 -> A380(1), 13-25 -> Boeing 777(2), 26-38 -> A350(3), 39-50 -> Boeing 787(4)
-func aircraftIDToModelID(aircraftID int) uint {
-	switch {
-	case aircraftID <= 12:
-		return 1
-	case aircraftID <= 25:
-		return 2
-	case aircraftID <= 38:
-		return 3
-	default:
-		return 4
-	}
+// MatricesJSON maps to matrices.json to check supported routes
+type MatricesJSON struct {
+	EconomyFares    map[string]map[string]*float64 `json:"economy_fares"`
+	FirstClassFares map[string]map[string]*float64 `json:"first_class_fares"`
 }
+
+
 
 // SeedFlightsFromCSV loads the dataset CSV into the DB if the vuelos table is empty
 func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
@@ -67,10 +62,37 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 	reader := csv.NewReader(f)
 	reader.TrimLeadingSpace = true
 
+	// Load matrices.json to validate routes (Rule 3)
+	var matrices MatricesJSON
+	matrixBytes, err := os.ReadFile(filepath.Join("data", "matrices.json"))
+	if err == nil {
+		json.Unmarshal(matrixBytes, &matrices)
+	} else {
+		log.Printf("[Seed Flights] Warning: could not read matrices.json: %v", err)
+	}
+
 	// Read header
 	if _, err := reader.Read(); err != nil {
 		log.Printf("[Seed Flights] Error reading CSV header: %v", err)
 		return
+	}
+
+	// Create a rejection log file
+	logFile, err := os.Create(filepath.Join("data", "rejected_flights.log"))
+	if err == nil {
+		defer logFile.Close()
+		logFile.WriteString("=== Registro de Vuelos Rechazados ===\n\n")
+	} else {
+		logFile = nil
+		log.Printf("[Seed Flights] Warning: could not create rejection log: %v", err)
+	}
+
+	// Helper function to write to log
+	logRejection := func(row []string, reason string) {
+		if logFile != nil {
+			flightInfo := strings.Join(row, ", ")
+			logFile.WriteString(fmt.Sprintf("RECHAZADO: %s | Motivo: %s\n", flightInfo, reason))
+		}
 	}
 
 	// Build ciudad lookup: codigo -> id
@@ -131,6 +153,7 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 		if !okO || !okD {
 			// Unknown airport code — skip
 			skipped++
+			logRejection(row, fmt.Sprintf("Ciudad de origen (%s) o destino (%s) no existe en la base de datos", origin, dest))
 			continue
 		}
 
@@ -146,7 +169,7 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 			puertaID = uint((i % len(puertas)) + 1)
 		}
 
-		avionID := aircraftIDToModelID(acID)
+		avionID := uint(acID)
 
 		// Build the departure Unix timestamp from date + time
 		// CSV date is MM/DD/YY, time is H:MM (24h)
@@ -167,6 +190,18 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 		// We'll just set llegada_programada = salida + 1h as placeholder (actual time is in matrix)
 		llegadaUnix := salidaUnix + 3600
 
+		// Rule 3: Check if route is supported in matrices.json
+		if matrices.EconomyFares != nil {
+			ecoFare := matrices.EconomyFares[origin][dest]
+			firstFare := matrices.FirstClassFares[origin][dest]
+			if ecoFare == nil || firstFare == nil {
+				// Route not supported by matrix, drop flight
+				skipped++
+				logRejection(row, fmt.Sprintf("La ruta de %s a %s no tiene precio en la matriz (null)", origin, dest))
+				continue
+			}
+		}
+
 		vuelo := models.Vuelo{
 			IDOrigen:          originID,
 			IDDestino:         destID,
@@ -182,6 +217,39 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 		}
 		vuelos = append(vuelos, vuelo)
 	}
+
+	// Rule 1: Set future flights to SCHEDULED (estado ID = 1)
+	now := time.Now().Unix()
+	for i := range vuelos {
+		if vuelos[i].SalidaProgramada > now {
+			vuelos[i].IDEstadoVuelo = 1
+		}
+	}
+
+	// Rule 2: Check continuity (no magic plane jumps)
+	// Sort flights by aircraft ID, then by scheduled departure time
+	sort.Slice(vuelos, func(i, j int) bool {
+		if vuelos[i].IDAvion == vuelos[j].IDAvion {
+			return vuelos[i].SalidaProgramada < vuelos[j].SalidaProgramada
+		}
+		return vuelos[i].IDAvion < vuelos[j].IDAvion
+	})
+
+	var validVuelos []models.Vuelo
+
+	for _, v := range vuelos {
+		// Rule 2 is temporarily disabled as requested by user.
+		// We append all flights to validVuelos without checking lastDest.
+		validVuelos = append(validVuelos, v)
+	}
+
+	vuelos = validVuelos
+	log.Printf("[Seed Flights] Validated flights. Magic jump check (Rule 2) is currently DISABLED.")
+
+	if logFile != nil {
+		logFile.WriteString(fmt.Sprintf("\n--- RESUMEN FINAL ---\n%d vuelos sobrevivieron a la revisión de ciudades y matriz, y fueron importados exitosamente (Saltos mágicos permitidos).\n", len(vuelos)))
+	}
+	log.Printf("[Seed Flights] Dataset loaded. Starting import of %d valid flights.", len(vuelos))
 
 	// Bulk insert in batches of 500 for performance
 	batchSize := 500

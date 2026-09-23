@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -221,12 +222,35 @@ func seedAsientos(dbConn *gorm.DB) {
 		return
 	}
 
+	// Make percentages configurable
+	percSoldStr := os.Getenv("PERCENTAGE_SOLD")
+	percSold := 0.73
+	if percSoldStr != "" {
+		if val, err := strconv.ParseFloat(percSoldStr, 64); err == nil {
+			percSold = val / 100.0
+		}
+	}
+	percReserved := 0.03
+
+	rand.Seed(time.Now().UnixNano())
+
 	var aviones []models.Avion
 	dbConn.Find(&aviones)
 
 	for _, avion := range aviones {
 		log.Printf("[Seed] Generating seats for %s (VIP: %d, Regular: %d)", avion.Nombre, avion.AsientosVip, avion.AsientosRegular)
 		
+		// Function to get a random state
+		getRandomState := func() string {
+			r := rand.Float64()
+			if r < percSold {
+				return "SALED"
+			} else if r < percSold + percReserved {
+				return "RESERVED"
+			}
+			return "AVAILABLE"
+		}
+
 		// Generate VIP seats (Row 1 to X)
 		vipRows := (avion.AsientosVip / 4) + 1
 		for i := 0; i < avion.AsientosVip; i++ {
@@ -235,7 +259,7 @@ func seedAsientos(dbConn *gorm.DB) {
 			seat := models.Asiento{
 				Codigo:  strconv.Itoa(row) + col,
 				IDAvion: avion.ID,
-				Estado:  "AVAILABLE",
+				Estado:  getRandomState(),
 				Clase:   "VIP",
 			}
 			dbConn.Create(&seat)
@@ -248,7 +272,7 @@ func seedAsientos(dbConn *gorm.DB) {
 			seat := models.Asiento{
 				Codigo:  strconv.Itoa(row) + col,
 				IDAvion: avion.ID,
-				Estado:  "AVAILABLE",
+				Estado:  getRandomState(),
 				Clase:   "REGULAR",
 			}
 			dbConn.Create(&seat)
