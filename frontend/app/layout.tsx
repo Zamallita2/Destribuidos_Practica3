@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
 
 export const metadata: Metadata = {
-  title: 'AirRes | Modern Airline Dashboard',
+  title: 'Aerolíneas Pabón | Panel de vuelos',
   description: 'Sistema de administración de aerolíneas con sincronización en tiempo real.',
 };
 
@@ -31,7 +31,7 @@ export default function RootLayout({
               {/* Topbar */}
               <header className="sticky top-0 z-40 w-full glass-panel border-x-0 border-t-0 rounded-none px-6 py-4 flex items-center justify-between">
                 <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-                  Reserva de Vuelos
+                  Aerolíneas Pabón
                 </h1>
                 <div className="flex items-center gap-4">
                   <CountrySelector />

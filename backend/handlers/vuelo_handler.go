@@ -18,7 +18,9 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// GetAllVuelos returns all flights with their status
+// GetAllVuelos keeps the legacy array response for booking screens. The
+// catalog view adds a total so the management screen can page through the
+// entire imported dataset without downloading thousands of flights at once.
 func GetAllVuelos(c *gin.Context) {
 	tag := c.GetHeader("X-Region")
 	if tag == "" {
@@ -36,6 +38,25 @@ func GetAllVuelos(c *gin.Context) {
 		offset = requested
 	}
 	all := c.Query("scope") == "all"
+	pageView := c.Query("view") == "page"
+	var flightID, originID, destinationID uint64
+	for _, filter := range []struct {
+		name  string
+		value *uint64
+	}{
+		{"id", &flightID}, {"origin", &originID}, {"destination", &destinationID},
+	} {
+		if raw := c.Query(filter.name); raw != "" {
+			parsed, err := strconv.ParseUint(raw, 10, 32)
+			if err != nil || parsed == 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Filtro de vuelo inválido: " + filter.name})
+				return
+			}
+			*filter.value = parsed
+		}
+	}
+	var total int64
+	var importedCount, demoCount int64
 
 	if region == "Asia" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("vuelos")
@@ -45,11 +66,38 @@ func GetAllVuelos(c *gin.Context) {
 		findOptions := options.Find()
 		findOptions.SetLimit(int64(limit)).SetSkip(int64(offset))
 		filter := bson.M{}
+		if flightID > 0 {
+			filter["id"] = flightID
+		}
+		if originID > 0 {
+			filter["id_origen"] = originID
+		}
+		if destinationID > 0 {
+			filter["id_destino"] = destinationID
+		}
 		if all {
-			findOptions.SetSort(bson.M{"salida_programada": -1})
+			findOptions.SetSort(bson.D{{Key: "salida_programada", Value: -1}, {Key: "id", Value: -1}})
 		} else {
 			filter["salida_programada"] = bson.M{"$gte": time.Now().Unix()}
-			findOptions.SetSort(bson.M{"salida_programada": 1})
+			findOptions.SetSort(bson.D{{Key: "salida_programada", Value: 1}, {Key: "id", Value: 1}})
+		}
+		if pageView {
+			count, err := coll.CountDocuments(ctx, filter)
+			if err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+				return
+			}
+			total = count
+			demoCount, err = coll.CountDocuments(ctx, bson.M{"demo": true})
+			if err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+				return
+			}
+			importedCount, err = coll.CountDocuments(ctx, bson.M{"demo": bson.M{"$ne": true}})
+			if err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+				return
+			}
 		}
 		cursor, err := coll.Find(ctx, filter, findOptions)
 		if err != nil {
@@ -63,10 +111,29 @@ func GetAllVuelos(c *gin.Context) {
 		}
 	} else if dbConn != nil {
 		query := dbConn.Model(&models.Vuelo{})
+		if flightID > 0 {
+			query = query.Where("id = ?", flightID)
+		}
+		if originID > 0 {
+			query = query.Where("id_origen = ?", originID)
+		}
+		if destinationID > 0 {
+			query = query.Where("id_destino = ?", destinationID)
+		}
 		if all {
-			query = query.Order("salida_programada DESC")
+			query = query.Order("salida_programada DESC, id DESC")
 		} else {
-			query = query.Where("salida_programada >= ?", time.Now().Unix()).Order("salida_programada ASC")
+			query = query.Where("salida_programada >= ?", time.Now().Unix()).Order("salida_programada ASC, id ASC")
+		}
+		if pageView {
+			if err := query.Count(&total).Error; err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+				return
+			}
+			if err := dbConn.Raw("SELECT COUNT(*) FILTER (WHERE demo IS TRUE), COUNT(*) FILTER (WHERE demo IS NOT TRUE) FROM vuelos").Row().Scan(&demoCount, &importedCount); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+				return
+			}
 		}
 		if err := query.Limit(limit).Offset(offset).Find(&vuelos).Error; err != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
@@ -77,6 +144,11 @@ func GetAllVuelos(c *gin.Context) {
 		return
 	}
 
+	if pageView {
+		c.JSON(http.StatusOK, gin.H{"items": vuelos, "total": total, "limit": limit, "offset": offset,
+			"catalog": gin.H{"imported": importedCount, "demo": demoCount}})
+		return
+	}
 	c.JSON(http.StatusOK, vuelos)
 }
 

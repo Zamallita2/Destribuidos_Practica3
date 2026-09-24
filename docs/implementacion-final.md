@@ -8,6 +8,8 @@ Al arrancar, la aplicación escribe `reports/vuelos_rechazados.csv` con las colu
 
 Los vuelos históricos pertenecen al PostgreSQL de la región de origen. Los identificadores de América son menores que 1.000.000.000 y los de Europa/Asia son mayores o iguales. El otro PostgreSQL conserva una copia de recuperación; MongoDB mantiene la proyección central.
 
+En la interfaz, **Vuelos → Todos los vuelos** consulta el catálogo completo con paginación del servidor. Los contadores separan los vuelos importados del CSV de los 50 vuelos de demostración; el total visible cambia con los filtros. El usuario puede buscar por ID, origen o destino e ir directamente a una página. **Solo próximos** muestra los vuelos cuya salida aún no pasó, que pueden ser apenas los 50 vuelos de demostración aunque existan decenas de miles de vuelos históricos. El panel principal muestra el total registrado y distingue esa cifra de las 10 próximas salidas que usa como muestra.
+
 ## Ocupación y pasajeros
 
 Cada vuelo tiene un manifiesto propio en `ocupaciones_vuelo`. Incluye un asiento y un pasajero simulado para cada plaza inicialmente vendida (`SALED`) o reservada (`RESERVED`). La lista de nombres incluye caracteres latinos, chinos, japoneses y árabes. Un vuelo sin tarifa para una clase muestra esos asientos como `BLOCKED`; solo las plazas comercializables forman la base del 73 % y el 3 %.
