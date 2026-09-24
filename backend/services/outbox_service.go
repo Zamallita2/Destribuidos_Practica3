@@ -68,11 +68,15 @@ func QueueOutboxEvent(tx *gorm.DB, action, entity string, data interface{}) erro
 // StartOutboxWorker retries every committed event until both relational
 // replicas and the MongoDB projection acknowledge it.
 func StartOutboxWorker() {
+	go runOutboxWorker(func() *gorm.DB { return db.PGAmerica })
+	runOutboxWorker(func() *gorm.DB { return db.PGEuropaAsia })
+}
+
+func runOutboxWorker(currentDB func() *gorm.DB) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		drainOutbox(db.PGAmerica)
-		drainOutbox(db.PGEuropaAsia)
+		drainOutbox(currentDB())
 	}
 }
 
@@ -81,42 +85,49 @@ func drainOutbox(conn *gorm.DB) {
 		return
 	}
 	for i := 0; i < 500; i++ {
-		found := false
+		var row models.SyncOutbox
+		leaseUntil := time.Now().Add(30 * time.Second).Unix()
 		err := conn.Transaction(func(tx *gorm.DB) error {
-			var row models.SyncOutbox
 			result := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
 				Where("delivered_at = 0 AND next_attempt_at <= ?", time.Now().Unix()).
 				Order("created_at, event_id").Limit(1).Find(&row)
-			if result.RowsAffected == 0 {
-				return nil
-			}
 			if result.Error != nil {
 				return result.Error
 			}
-			found = true
-			event, decodeErr := DecodeOutboxEvent(row)
-			if decodeErr == nil {
-				decodeErr = ApplySyncEvent(event)
+			if result.RowsAffected == 0 {
+				return nil
 			}
-			if decodeErr != nil {
-				row.Attempts++
-				row.LastError = decodeErr.Error()
-				delay := row.Attempts * 2
-				if delay > 60 {
-					delay = 60
-				}
-				row.NextAttemptAt = time.Now().Add(time.Duration(delay) * time.Second).Unix()
-			} else {
-				row.DeliveredAt = time.Now().Unix()
-				row.LastError = ""
-			}
-			return tx.Save(&row).Error
+			return tx.Model(&row).Update("next_attempt_at", leaseUntil).Error
 		})
 		if err != nil {
-			log.Printf("[Outbox] processing failed: %v", err)
+			log.Printf("[Outbox] claim failed: %v", err)
 			return
 		}
-		if !found {
+		if row.EventID == "" {
+			return
+		}
+		// The network writes happen after the claim transaction commits. A
+		// failed node cannot leave a PostgreSQL transaction open indefinitely.
+		event, deliveryErr := DecodeOutboxEvent(row)
+		if deliveryErr == nil {
+			deliveryErr = ApplySyncEvent(event)
+		}
+		updates := map[string]interface{}{}
+		if deliveryErr != nil {
+			attempts := row.Attempts + 1
+			delay := attempts * 2
+			if delay > 60 {
+				delay = 60
+			}
+			updates["attempts"] = attempts
+			updates["last_error"] = deliveryErr.Error()
+			updates["next_attempt_at"] = time.Now().Add(time.Duration(delay) * time.Second).Unix()
+		} else {
+			updates["delivered_at"] = time.Now().Unix()
+			updates["last_error"] = ""
+		}
+		if err := conn.Model(&models.SyncOutbox{}).Where("event_id = ? AND next_attempt_at = ?", row.EventID, leaseUntil).Updates(updates).Error; err != nil {
+			log.Printf("[Outbox] completion failed for %s: %v", row.EventID, err)
 			return
 		}
 	}

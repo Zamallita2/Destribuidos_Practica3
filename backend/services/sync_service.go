@@ -64,6 +64,9 @@ func ApplySyncEvent(event SyncEvent) error {
 
 // syncToPostgres performs an Upsert logic or Save logic based on the action
 func syncToPostgres(pgDb *gorm.DB, event SyncEvent, node string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	pgDb = pgDb.WithContext(ctx)
 	GlobalLamportClock.UpdateClock(event.LamportClock)
 
 	// GORM's Save performs an UPSERT (updates if exists, creates if not)
@@ -80,35 +83,53 @@ func syncToPostgres(pgDb *gorm.DB, event SyncEvent, node string) error {
 			switch event.Entity {
 			case "Vuelo":
 				var v models.Vuelo
-				if pgDb.First(&v, id).Error == nil {
+				result := pgDb.Limit(1).Find(&v, id)
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected > 0 {
 					existingClock = v.LamportClock
 					existingVector = v.VectorClock
 					existingNode = v.SourceNode
 				}
 			case "Boleto":
 				var b models.Boleto
-				if pgDb.First(&b, id).Error == nil {
+				result := pgDb.Limit(1).Find(&b, id)
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected > 0 {
 					existingClock = b.LamportClock
 					existingVector = b.VectorClock
 					existingNode = b.SourceNode
 				}
 			case "Asiento":
 				var a models.Asiento
-				if pgDb.First(&a, id).Error == nil {
+				result := pgDb.Limit(1).Find(&a, id)
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected > 0 {
 					existingClock = a.LamportClock
 					existingVector = a.VectorClock
 					existingNode = a.SourceNode
 				}
 			case "OcupacionVuelo":
 				var occupancy models.OcupacionVuelo
-				if pgDb.First(&occupancy, "id_vuelo = ?", id).Error == nil {
+				result := pgDb.Where("id_vuelo = ?", id).Limit(1).Find(&occupancy)
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected > 0 {
 					existingClock = occupancy.LamportClock
 					existingVector = occupancy.VectorClock
 					existingNode = occupancy.SourceNode
 				}
 			}
 			if !ShouldApplyVersion(incomingVector, existingVector, incomingClock, existingClock, event.NodeID, existingNode) {
-				log.Printf("[Sync Service %s] Conflict Resolved: Rejected stale %s update\n", node, event.Entity)
+				if event.Entity != "OcupacionVuelo" {
+					log.Printf("[Sync Service %s] Conflict Resolved: Rejected stale %s update", node, event.Entity)
+				}
 				return nil
 			}
 		}
@@ -118,7 +139,9 @@ func syncToPostgres(pgDb *gorm.DB, event SyncEvent, node string) error {
 			log.Printf("[Sync Service] Error syncing to DB %s: %v\n", node, err)
 			return err
 		}
-		log.Printf("[Sync Service] Successfully synced %s to %s DB\n", event.Entity, node)
+		if event.Entity != "OcupacionVuelo" {
+			log.Printf("[Sync Service] Successfully synced %s to %s DB", event.Entity, node)
+		}
 	} else if event.Action == "DELETE" {
 		err := pgDb.Delete(event.Data).Error
 		if err != nil {
@@ -207,7 +230,9 @@ func syncToMongo(event SyncEvent) error {
 				return err
 			}
 			if !ShouldApplyVersion(incomingVector, existingVector, incomingClock, existingClock, event.NodeID, existingNode) {
-				log.Printf("[Sync Service Mongo] Conflict Resolved: Rejected stale %s update\n", event.Entity)
+				if event.Entity != "OcupacionVuelo" {
+					log.Printf("[Sync Service Mongo] Conflict Resolved: Rejected stale %s update", event.Entity)
+				}
 				return nil
 			}
 		}
@@ -218,7 +243,9 @@ func syncToMongo(event SyncEvent) error {
 			log.Printf("[Sync Service] Error syncing to Mongo: %v\n", err)
 			return err
 		}
-		log.Printf("[Sync Service] Successfully synced %s to MongoDB Asia\n", event.Entity)
+		if event.Entity != "OcupacionVuelo" {
+			log.Printf("[Sync Service] Successfully synced %s to MongoDB Asia", event.Entity)
+		}
 	} else if event.Action == "DELETE" {
 		var filter bson.M
 		if event.Entity == "Boleto" {

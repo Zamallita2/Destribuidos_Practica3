@@ -73,12 +73,6 @@ func main() {
 		log.Println("[Seed Flights] WARNING: Dataset CSV not found. Place flights.csv in backend/data/ or dataset/ folder.")
 	}
 	seedDemoFlights()
-	reconcilePostgresReplicas()
-
-	// Seed MongoDB matrices
-	seedMongoMatrices()
-	bootstrapMongo(true)
-	pruneMongoOrphans()
 
 	// Start Background Multi-Master Syncing Goroutine
 	go services.StartOutboxWorker()
@@ -86,6 +80,14 @@ func main() {
 	go seedMissingOccupancy()
 	go startReplicaReconciler()
 	go startRecoveryMonitor()
+	// A large existing dataset can take minutes to reconcile. Keep the API
+	// available while the persisted outbox and snapshots catch up in the back.
+	go func() {
+		reconcilePostgresReplicas()
+		seedMongoMatrices()
+		bootstrapMongo(false)
+		pruneMongoOrphans()
+	}()
 
 	r := gin.Default()
 

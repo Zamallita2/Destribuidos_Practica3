@@ -14,11 +14,15 @@ Cada vuelo tiene un manifiesto propio en `ocupaciones_vuelo`. Incluye un asiento
 
 Los asientos son indivisibles: se usa `round(plazas_comercializables × 0,73)` y `round(plazas_comercializables × 0,03)`. Por ejemplo, 228 plazas producen 166 vendidas y 7 reservadas. El manifiesto se genera de forma determinista y se guarda en PostgreSQL, se replica al otro PostgreSQL y se proyecta a MongoDB. Una tarea de fondo llena los manifiestos faltantes; consultar asientos o reservar genera el manifiesto de ese vuelo de inmediato. `GET /api/dashboard` informa cuántos manifiestos se han generado.
 
+En una primera carga de unos 30.000 vuelos, esa tarea puede durar varios minutos y la sincronización de sus eventos puede continuar después. Es normal ver el proceso activo: `docker compose up --build` mantiene la terminal unida a los servicios. Para dejarlo en segundo plano, usar `docker compose up -d --build`; revisar `docker compose logs --tail=30 backend` y `http://localhost:8080/api/health`. La API debe responder durante el llenado. Los eventos pendientes quedan en `sync_outbox` y se reintentan tras reiniciar, sin volver a importar los vuelos ya guardados.
+
 Los boletos posteriores se guardan como registros separados. La reserva usa una transacción, bloqueo del vuelo y un índice único sobre `(id_vuelo, id_asiento)` para estados activos. Un asiento ocupado en el manifiesto tampoco puede comprarse de nuevo. Una cancelación pasa por `REFUNDED` y queda disponible al vencer `REFUND_DELAY_MINUTES` (15 por defecto).
 
 ## Sincronización y fallos
 
 Cada compra o modificación crea un evento en `sync_outbox` dentro de la misma transacción. El publicador reintenta los eventos hasta que ambos PostgreSQL y MongoDB los reciban. Los relojes vectoriales conservan causalidad y Lamport más identificador de nodo resuelve eventos concurrentes. Al reiniciar se restaura el estado de los relojes desde el outbox. La reconciliación periódica copia registros faltantes tras la recuperación de un PostgreSQL.
+
+Cada publicador reclama el evento en una transacción breve, la cierra y luego lo entrega por red. Así una base desconectada no deja retenido un bloqueo SQL durante los reintentos. La reconciliación inicial y el llenado de Mongo se ejecutan en segundo plano para que el arranque HTTP no espere a copiar todos los manifiestos.
 
 Si cae uno de los PostgreSQL, las lecturas y escrituras usan la copia del otro. Si cae MongoDB, las consultas de Asia recurren al PostgreSQL disponible. Una compra se confirma con HTTP 200 después de que exista una segunda copia; si solo quedó guardada localmente, responde HTTP 202 y muestra `replication_pending`. El `GET /api/health` publica el estado de los tres nodos. El asignador transaccional `id_allocators` evita consumir identificadores de dominio por transacciones revertidas, algo que `nextval()` no garantiza.
 

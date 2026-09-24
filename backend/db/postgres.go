@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 var PGAmerica *gorm.DB
@@ -16,7 +17,7 @@ func InitPostgres() {
 	if dsnAm == "" {
 		dsnAm = "host=localhost user=postgres password=root dbname=airres_am port=5432 sslmode=disable"
 	}
-	dbAm, err := gorm.Open(postgres.Open(dsnAm), &gorm.Config{DisableAutomaticPing: true})
+	dbAm, err := gorm.Open(postgres.Open(dsnAm), &gorm.Config{DisableAutomaticPing: true, Logger: gormlogger.Default.LogMode(gormlogger.Error)})
 	if err != nil {
 		log.Println("WARNING: Failed to configure PG America:", err)
 	} else {
@@ -32,7 +33,7 @@ func InitPostgres() {
 	if dsnEu == "" {
 		dsnEu = "host=localhost user=postgres password=root dbname=airres_eu port=5433 sslmode=disable"
 	}
-	dbEu, err := gorm.Open(postgres.Open(dsnEu), &gorm.Config{DisableAutomaticPing: true})
+	dbEu, err := gorm.Open(postgres.Open(dsnEu), &gorm.Config{DisableAutomaticPing: true, Logger: gormlogger.Default.LogMode(gormlogger.Error)})
 	if err != nil {
 		log.Println("WARNING: Failed to connect to PG Europa (might not be required right now or starting up):", err)
 	} else {
