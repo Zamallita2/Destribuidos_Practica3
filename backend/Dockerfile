@@ -2,7 +2,7 @@ FROM golang:alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache gcc musl-dev
+RUN apk add --no-cache gcc musl-dev tzdata openssl
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o airres-api main.go
+RUN go build -o airres-api .
 
 EXPOSE 8080
 

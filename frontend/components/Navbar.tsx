@@ -15,6 +15,7 @@ export default function Navbar() {
     { href: "/vuelos", label: t("nav.flights"), icon: Plane },
     { href: "/boletos", label: t("nav.tickets"), icon: Ticket },
     { href: "/sugerencias", label: t("nav.routes"), icon: Map },
+    { href: "/tsp", label: t("nav.tsp"), icon: Map },
     { href: "/configuracion", label: t("nav.settings"), icon: Settings },
   ];
 

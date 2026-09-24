@@ -38,6 +38,7 @@
     "flights": "Flights",
     "tickets": "Tickets",
     "routes": "Suggestions",
+    "tsp": "Traveling Salesperson",
     "settings": "Settings",
     "tsp": "Traveler Agent"
   }

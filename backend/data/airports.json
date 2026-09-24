@@ -1,0 +1,17 @@
+{
+  "ATL": {"country":"Estados Unidos","region":"America","time_zone":"America/New_York"},
+  "PEK": {"country":"China","region":"Asia","time_zone":"Asia/Shanghai"},
+  "DXB": {"country":"Emiratos Árabes Unidos","region":"Asia","time_zone":"Asia/Dubai"},
+  "TYO": {"country":"Japón","region":"Asia","time_zone":"Asia/Tokyo"},
+  "LON": {"country":"Reino Unido","region":"Europa","time_zone":"Europe/London"},
+  "LAX": {"country":"Estados Unidos","region":"America","time_zone":"America/Los_Angeles"},
+  "PAR": {"country":"Francia","region":"Europa","time_zone":"Europe/Paris"},
+  "FRA": {"country":"Alemania","region":"Europa","time_zone":"Europe/Berlin"},
+  "IST": {"country":"Turquía","region":"Europa","time_zone":"Europe/Istanbul"},
+  "SIN": {"country":"Singapur","region":"Asia","time_zone":"Asia/Singapore"},
+  "MAD": {"country":"España","region":"Europa","time_zone":"Europe/Madrid"},
+  "AMS": {"country":"Países Bajos","region":"Europa","time_zone":"Europe/Amsterdam"},
+  "DFW": {"country":"Estados Unidos","region":"America","time_zone":"America/Chicago"},
+  "CAN": {"country":"China","region":"Asia","time_zone":"Asia/Shanghai"},
+  "SAO": {"country":"Brasil","region":"America","time_zone":"America/Sao_Paulo"}
+}

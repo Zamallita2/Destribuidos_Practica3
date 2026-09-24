@@ -34,7 +34,7 @@ func GetSugerencias(c *gin.Context) {
 	}
 
 	rutas := services.FindTop3Paths(origen, destino, criterio, clase, tag)
-	
+
 	// If it doesn't find any, return empty list
 	if len(rutas) == 0 {
 		c.JSON(http.StatusOK, []services.SuggestedRoute{})

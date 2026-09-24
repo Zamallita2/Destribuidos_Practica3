@@ -48,7 +48,7 @@ func main() {
 			log.Printf("Error connecting to PG (%s): %v", dsn, err)
 			continue
 		}
-		
+
 		db.Exec("TRUNCATE TABLE precios, detalles_vuelos CASCADE")
 		db.Exec("INSERT INTO precios (matriz_precios_regular, matriz_precios_vip) VALUES (?, ?)", string(precRegJson), string(precVipJson))
 		db.Exec("INSERT INTO detalles_vuelos (matriz_tiempos) VALUES (?)", string(timeJson))
@@ -63,7 +63,7 @@ func main() {
 		db := client.Database("airres_sync")
 		db.Collection("precios").Drop(ctx)
 		db.Collection("detalles_vuelos").Drop(ctx)
-		
+
 		db.Collection("precios").InsertOne(ctx, map[string]interface{}{
 			"matriz_precios_regular": m.PreciosRegular,
 			"matriz_precios_vip":     m.PreciosVip,

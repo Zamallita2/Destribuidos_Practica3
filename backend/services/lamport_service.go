@@ -29,7 +29,7 @@ func (lc *lamportClock) Tick() int64 {
 func (lc *lamportClock) UpdateClock(incomingClock int64) {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
-	
+
 	if incomingClock > lc.clock {
 		lc.clock = incomingClock
 	}

@@ -2,9 +2,10 @@ package services
 
 import (
 	"math"
+	"strings"
 )
 
-// TSPRoute represents a complete path and its cost/time
+// TSPRoute describes network edges, not a dated reservation itinerary.
 type TSPRoute struct {
 	Ruta   []string       `json:"ruta"`
 	Costo  float64        `json:"costo"`
@@ -12,97 +13,119 @@ type TSPRoute struct {
 	Vuelos []RouteDetails `json:"vuelos"`
 }
 
-// CalculateTSP calculates the shortest Hamiltonian path visiting all given cities exactly once.
-// It is an open-ended path (does not return to origin).
-func CalculateTSP(ciudades []string, criterion string, seatClass string, region string) *TSPRoute {
-	if len(ciudades) < 2 {
+func CalculateTSP(ciudades []string, criterion, seatClass, region string) *TSPRoute {
+	return CalculateTSPWithReturn(ciudades, criterion, seatClass, region, false)
+}
+
+func CalculateTSPWithReturn(ciudades []string, criterion, seatClass, region string, returnToOrigin bool) *TSPRoute {
+	times, economy, first := getMatricesFromDB(region)
+	return CalculateTSPFromMatrices(ciudades, criterion, seatClass, returnToOrigin, times, economy, first)
+}
+
+// CalculateTSPFromMatrices uses Held-Karp dynamic programming. Missing or zero
+// fares are absent arcs even when optimizing travel time.
+func CalculateTSPFromMatrices(ciudades []string, criterion, seatClass string, returnToOrigin bool,
+	times, economy, first map[string]map[string]float64) *TSPRoute {
+	n := len(ciudades)
+	if n < 2 || n > 15 {
 		return nil
 	}
-
-	tiempos, preciosReg, preciosVip := getMatricesFromDB(region)
-	
-	var costMatrix map[string]map[string]float64
-	if criterion == "TIME" {
-		costMatrix = tiempos
-	} else {
-		if seatClass == "VIP" {
-			costMatrix = preciosVip
-		} else {
-			costMatrix = preciosReg
+	seen := make(map[string]bool, n)
+	for _, city := range ciudades {
+		if city == "" || seen[city] {
+			return nil
+		}
+		seen[city] = true
+	}
+	fares := economy
+	if strings.EqualFold(seatClass, "VIP") || strings.EqualFold(seatClass, "FIRST") {
+		fares = first
+	}
+	weight := func(i, j int) float64 {
+		fare := fares[ciudades[i]][ciudades[j]]
+		hours := times[ciudades[i]][ciudades[j]]
+		if fare <= 0 || hours <= 0 {
+			return math.Inf(1)
+		}
+		if strings.EqualFold(criterion, "TIME") {
+			return hours
+		}
+		return fare
+	}
+	states := 1 << n
+	dp := make([]float64, states*n)
+	prev := make([]int, states*n)
+	for i := range dp {
+		dp[i] = math.Inf(1)
+		prev[i] = -1
+	}
+	for i := 0; i < n; i++ {
+		if !returnToOrigin || i == 0 {
+			dp[(1<<i)*n+i] = 0
 		}
 	}
-
-	var bestRoute []string
-	bestVal := math.MaxFloat64
-
-	var permute func(arr []string, l, r int)
-	permute = func(arr []string, l, r int) {
-		if l == r {
-			// Evaluate current permutation
-			valid := true
-			currentVal := 0.0
-			for i := 0; i < len(arr)-1; i++ {
-				from := arr[i]
-				to := arr[i+1]
-				
-				if costMatrix[from] == nil {
-					valid = false
-					break
-				}
-				val := costMatrix[from][to]
-				// 0 means no route, unless from == to (which shouldn't happen here)
-				if val == 0 && from != to {
-					valid = false
-					break
-				}
-				currentVal += val
+	for mask := 1; mask < states; mask++ {
+		for last := 0; last < n; last++ {
+			if mask&(1<<last) == 0 {
+				continue
 			}
-			
-			if valid && currentVal < bestVal {
-				bestVal = currentVal
-				bestRoute = make([]string, len(arr))
-				copy(bestRoute, arr)
+			current := dp[mask*n+last]
+			if math.IsInf(current, 1) {
+				continue
 			}
-		} else {
-			for i := l; i <= r; i++ {
-				arr[l], arr[i] = arr[i], arr[l]
-				permute(arr, l+1, r)
-				arr[l], arr[i] = arr[i], arr[l] // backtrack
+			for next := 0; next < n; next++ {
+				if mask&(1<<next) != 0 {
+					continue
+				}
+				arc := weight(last, next)
+				if math.IsInf(arc, 1) {
+					continue
+				}
+				nextMask := mask | (1 << next)
+				index := nextMask*n + next
+				if current+arc < dp[index] {
+					dp[index] = current + arc
+					prev[index] = last
+				}
 			}
 		}
 	}
-
-	permute(ciudades, 0, len(ciudades)-1)
-
-	if bestVal == math.MaxFloat64 || len(bestRoute) == 0 {
+	fullMask := states - 1
+	best, end := math.Inf(1), -1
+	for last := 0; last < n; last++ {
+		cost := dp[fullMask*n+last]
+		if returnToOrigin {
+			cost += weight(last, 0)
+		}
+		if cost < best {
+			best, end = cost, last
+		}
+	}
+	if end < 0 || math.IsInf(best, 1) {
 		return nil
 	}
-
-	resp := &TSPRoute{
-		Ruta: bestRoute,
+	indices := make([]int, n)
+	mask, last := fullMask, end
+	for position := n - 1; position >= 0; position-- {
+		indices[position] = last
+		nextLast := prev[mask*n+last]
+		mask &^= 1 << last
+		last = nextLast
 	}
-	
-	for i := 0; i < len(bestRoute)-1; i++ {
-		from := bestRoute[i]
-		to := bestRoute[i+1]
-		
-		t := tiempos[from][to]
-		c := 0.0
-		if seatClass == "VIP" {
-			c = preciosVip[from][to]
-		} else {
-			c = preciosReg[from][to]
+	if returnToOrigin {
+		indices = append(indices, indices[0])
+	}
+	route := &TSPRoute{Ruta: make([]string, len(indices))}
+	for i, index := range indices {
+		route.Ruta[i] = ciudades[index]
+		if i == 0 {
+			continue
 		}
-		
-		resp.Tiempo += t
-		resp.Costo += c
-		resp.Vuelos = append(resp.Vuelos, RouteDetails{
-			Salida:  from,
-			Llegada: to,
-			Cost:    c,
-			Time:    t,
-		})
+		from, to := ciudades[indices[i-1]], ciudades[index]
+		fare, hours := fares[from][to], times[from][to]
+		route.Costo += fare
+		route.Tiempo += hours
+		route.Vuelos = append(route.Vuelos, RouteDetails{Salida: from, Llegada: to, Cost: fare, Time: hours})
 	}
-	
-	return resp
+	return route
 }

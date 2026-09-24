@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { Ticket, Info, Loader2, ArrowRight, X } from "lucide-react";
 
 export default function Vuelos() {
-  const [vuelos, setVuelos] = useState([]);
-  const [ciudades, setCiudades] = useState([]);
-  const [aviones, setAviones] = useState([]);
+  const [vuelos, setVuelos] = useState<any[]>([]);
+  const [ciudades, setCiudades] = useState<any[]>([]);
+  const [aviones, setAviones] = useState<any[]>([]);
   const [matrix, setMatrix] = useState<any>(null);
   const [precios, setPrecios] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -29,19 +29,19 @@ export default function Vuelos() {
         "X-Region": countryData.region || "America"
       };
       
-      const res = await fetch("http://localhost:8080/api/vuelos", { headers: countryHeaders });
+      const res = await fetch("/api/vuelos", { headers: countryHeaders });
       if (res.ok) setVuelos(await res.json());
 
-      const resCiudades = await fetch("http://localhost:8080/api/ciudades", { headers: countryHeaders });
+      const resCiudades = await fetch("/api/ciudades", { headers: countryHeaders });
       if (resCiudades.ok) setCiudades(await resCiudades.json());
 
-      const resAviones = await fetch("http://localhost:8080/api/aviones", { headers: countryHeaders });
+      const resAviones = await fetch("/api/aviones", { headers: countryHeaders });
       if (resAviones.ok) setAviones(await resAviones.json());
 
-      const resMatrix = await fetch("http://localhost:8080/api/tiempos", { headers: countryHeaders });
+      const resMatrix = await fetch("/api/tiempos", { headers: countryHeaders });
       if (resMatrix.ok) setMatrix(await resMatrix.json());
 
-      const resPrecios = await fetch("http://localhost:8080/api/precios", { headers: countryHeaders });
+      const resPrecios = await fetch("/api/precios", { headers: countryHeaders });
       if (resPrecios.ok) setPrecios(await resPrecios.json());
       
     } catch(e) {
@@ -63,7 +63,7 @@ export default function Vuelos() {
   }
 
   const changeState = async (id: number, nextStateId: number) => {
-     await fetch(`http://localhost:8080/api/vuelos/${id}/estado?id_estado=${nextStateId}`, { 
+     await fetch(`/api/vuelos/${id}/estado?id_estado=${nextStateId}`, {
        method: "PUT",
        headers: {
         "X-User-Country": JSON.parse(localStorage.getItem("airres-country") || "{}").name || "Estados Unidos",
@@ -82,8 +82,9 @@ export default function Vuelos() {
        const dstCity: any = ciudades.find((c: any) => c.id === parseInt(dst));
        
        if (orgCity && dstCity) {
-          const price = precios.matriz_precios_regular?.[orgCity.codigo]?.[dstCity.codigo];
-          if (org === dst || price === null || price === undefined) {
+           const economy = precios.matriz_precios_regular?.[orgCity.codigo]?.[dstCity.codigo];
+           const first = precios.matriz_precios_vip?.[orgCity.codigo]?.[dstCity.codigo];
+           if (org === dst || !((economy != null && economy > 0) || (first != null && first > 0))) {
              setErrorVuelo("🚫 Esta ruta no está permitida. Por favor selecciona un destino habilitado.");
              (document.getElementById("dst") as HTMLSelectElement).value = "";
              return false;
@@ -121,7 +122,9 @@ export default function Vuelos() {
     return ciudades.filter((c: any) => {
       if (c.id === currentCityId) return false;
       const val = destCodes[c.codigo];
-      return val !== null && val !== undefined && val > 0;
+      const economy = precios?.matriz_precios_regular?.[originCode]?.[c.codigo];
+      const first = precios?.matriz_precios_vip?.[originCode]?.[c.codigo];
+      return val > 0 && ((economy != null && economy > 0) || (first != null && first > 0));
     });
   };
 
@@ -353,7 +356,7 @@ export default function Vuelos() {
                            const arrivalEpoch = epoch + (travelTimeHours * 3600);
                            const gateId = 1;
 
-                           const res = await fetch("http://localhost:8080/api/vuelos", {
+                           const res = await fetch("/api/vuelos", {
                               method: "POST",
                               headers: {
                                 "Content-Type": "application/json",
@@ -406,7 +409,7 @@ export default function Vuelos() {
 
                               const arrivalEpoch = currentEpoch + (travelHours * 3600);
 
-                              const res = await fetch("http://localhost:8080/api/vuelos", {
+                              const res = await fetch("/api/vuelos", {
                                  method: "POST",
                                  headers,
                                  body: JSON.stringify({
@@ -455,6 +458,7 @@ export default function Vuelos() {
                             <Info className="text-blue-400 w-8 h-8" /> Detalle del Vuelo
                         </h3>
                         <p className="text-gray-500 font-mono mt-1">ID: VUELO-{selectedVuelo.id}</p>
+                        <a href={`/dashboard/vuelos/${selectedVuelo.id}`} className="text-blue-400 underline">Ver panel del vuelo</a>
                     </div>
                     <button onClick={() => setSelectedVuelo(null)} className="p-2 hover:bg-white/10 rounded-full transition text-gray-400">
                         <X className="w-6 h-6" />

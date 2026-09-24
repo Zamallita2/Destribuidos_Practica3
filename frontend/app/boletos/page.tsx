@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Search, Info, User, Check, X, CreditCard, Plane, MapPin, Loader2, ArrowRight, Ticket } from "lucide-react";
 import dynamic from "next/dynamic";
+import { formatFlightLocalTime } from "@/lib/flightTime";
+import { PURCHASE_CAPITALS } from "@/data/capitals";
 
 const PlaneModelViewer = dynamic(() => import("@/components/PlaneModelViewer"), { 
   ssr: false,
@@ -32,6 +34,20 @@ export default function Boletos() {
   });
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [buyerTimeZone, setBuyerTimeZone] = useState("America/Bogota");
+  const [purchasedPass, setPurchasedPass] = useState<{ id_boleto: number; pasajero: string; vuelo: number; asiento: string; qr_url: string; salida_local: string; llegada_local: string } | null>(null);
+  const [walletCapabilities, setWalletCapabilities] = useState({ apple: false, google: false });
+  const [googleWalletURL, setGoogleWalletURL] = useState("");
+
+  useEffect(() => {
+    fetch("/api/wallet/capabilities").then((response) => response.json()).then(setWalletCapabilities).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!purchasedPass || !walletCapabilities.google) return;
+    fetch(`/api/boletos/${purchasedPass.id_boleto}/wallet/google`)
+      .then((response) => response.json()).then((result) => setGoogleWalletURL(result.url || "")).catch(() => {});
+  }, [purchasedPass, walletCapabilities.google]);
 
   useEffect(() => {
     // Reset passenger when seat changes
@@ -50,9 +66,9 @@ export default function Boletos() {
         };
         
         const [cRes, vRes, pRes] = await Promise.all([
-          fetch("http://localhost:8080/api/ciudades", { headers: countryHeaders }),
-          fetch("http://localhost:8080/api/vuelos", { headers: countryHeaders }),
-          fetch("http://localhost:8080/api/precios", { headers: countryHeaders })
+          fetch("/api/ciudades", { headers: countryHeaders }),
+          fetch("/api/vuelos", { headers: countryHeaders }),
+          fetch("/api/precios", { headers: countryHeaders })
         ]);
 
         if (cRes.ok) setCiudades(await cRes.json());
@@ -99,7 +115,7 @@ export default function Boletos() {
         "X-User-Country": countryData.name || "Estados Unidos",
         "X-Region": countryData.region || "America"
       };
-      const res = await fetch(`http://localhost:8080/api/vuelos/${vuelo.id}/asientos`, { headers: countryHeaders });
+      const res = await fetch(`/api/vuelos/${vuelo.id}/asientos`, { headers: countryHeaders });
       if (res.ok) setAsientos(await res.json());
     } catch(e) {
       console.error(e);
@@ -114,9 +130,9 @@ export default function Boletos() {
     const dst = (ciudades.find((c: any) => c.id === vuelo.id_destino) as any)?.codigo;
     
     if (clase === 'VIP') {
-      return precios.matriz_precios_vip?.[org]?.[dst] || 1200;
+      return precios.matriz_precios_vip?.[org]?.[dst] ?? 0;
     }
-    return precios.matriz_precios_regular?.[org]?.[dst] || 400;
+    return precios.matriz_precios_regular?.[org]?.[dst] ?? 0;
   };
 
   const colorPorEstado = (estado: string) => {
@@ -144,7 +160,7 @@ export default function Boletos() {
       const cost = getPrice(selectedVuelo, selectedSeat.clase);
       const travelTime = Math.round((selectedVuelo.llegada_programada - selectedVuelo.salida_programada) / 3600);
       
-      const res = await fetch(`http://localhost:8080/api/reservas`, {
+      const res = await fetch(`/api/reservas`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -159,7 +175,8 @@ export default function Boletos() {
           pasaporte: passenger.pasaporte,
           tiempo_de_viaje: travelTime,
           estado: nuevoEstado,
-          costo: cost
+          costo: cost,
+          time_zone_compra: buyerTimeZone
         })
       });
 
@@ -167,6 +184,13 @@ export default function Boletos() {
         const errData = await res.json().catch(() => ({}));
         alert(`⚠️ ${errData.error || "Error al procesar la reserva/compra"}`);
       } else {
+        const ticket = await res.json();
+        if (ticket.replication_pending) {
+          alert("El boleto quedó guardado, pero la confirmación de réplica está pendiente. Consulta su estado en Gestión de Boletos.");
+        } else if (nuevoEstado === "SALED") {
+          const passResponse = await fetch(`/api/boletos/${ticket.id_boleto}/pase`);
+          if (passResponse.ok) setPurchasedPass(await passResponse.json());
+        }
         // Refresh seats
         await loadSeats(selectedVuelo);
         setSelectedSeat(null);
@@ -184,6 +208,20 @@ export default function Boletos() {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-5 duration-500 pb-20 max-w-7xl mx-auto">
+      {purchasedPass && <section role="dialog" aria-label="Pase de abordar" className="glass-panel mb-8 flex flex-wrap items-center justify-between gap-5 border border-emerald-500/40 p-6">
+        <div>
+          <h3 className="text-xl font-bold text-emerald-300">Compra confirmada · Pase de abordar #{purchasedPass.id_boleto}</h3>
+          <p>{purchasedPass.pasajero} · Vuelo AP-{purchasedPass.vuelo} · Asiento {purchasedPass.asiento}</p>
+          <p className="text-sm text-gray-400">Salida: {purchasedPass.salida_local} · Llegada: {purchasedPass.llegada_local}</p>
+          <p className="text-xs text-gray-400">El QR queda visible sin conexión en una billetera compatible. Para verificar su vigencia al escanearlo se necesita conexión.</p>
+          <a href={`/api/boletos/${purchasedPass.id_boleto}/wallet/demo.pkpass`} className="mr-4 mt-3 inline-block rounded bg-white px-4 py-2 text-sm font-semibold text-black">Añadir a mi Billetera / Descargar Pase</a>
+          <p className="mt-2 text-xs text-gray-400">Abre el archivo .pkpass descargado con una app compatible. Apple Wallet oficial requiere firma de emisor.</p>
+          {walletCapabilities.apple && <a href={`/api/boletos/${purchasedPass.id_boleto}/wallet/apple.pkpass`} className="mr-4 mt-3 inline-block rounded bg-white px-4 py-2 text-sm font-semibold text-black">Añadir a Apple Wallet</a>}
+          {googleWalletURL && <a href={googleWalletURL} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block rounded bg-white px-4 py-2 text-sm font-semibold text-black">Añadir a Google Wallet</a>}
+          <button onClick={() => setPurchasedPass(null)} className="mt-3 text-sm text-blue-300 underline">Cerrar</button>
+        </div>
+        <img src={purchasedPass.qr_url} width={180} height={180} alt="Código QR verificable del pase" className="rounded bg-white p-2" />
+      </section>}
       <div className="mb-10 text-center">
         <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 flex items-center justify-center gap-3">
           <Ticket className="text-blue-500 w-10 h-10" /> Venta de Boletos
@@ -275,20 +313,20 @@ export default function Boletos() {
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-gray-500 uppercase font-bold">Desde</p>
-                    <p className="text-2xl font-bold text-white">$ {getPrice(v, 'REGULAR')}</p>
+                    <p className="text-2xl font-bold text-white">$ {getPrice(v, 'REGULAR') || getPrice(v, 'VIP')}</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                    <div>
-                      <p className="text-gray-400 font-medium">Sale</p>
-                      <p className="text-white font-bold">{new Date(v.salida_programada * 1000).toLocaleString()}</p>
+                      <p className="text-gray-400 font-medium">Sale · hora local {(ciudades.find((c:any) => c.id === v.id_origen) as any)?.codigo}</p>
+                      <p className="text-white font-bold">{formatFlightLocalTime(v.salida_programada, (ciudades.find((c:any) => c.id === v.id_origen) as any)?.time_zone)}</p>
                    </div>
                    <div className="h-px bg-white/20 flex-1 mx-4 relative">
                       <div className="absolute -top-1 right-0 w-2 h-2 rounded-full bg-blue-500" />
                    </div>
                    <div className="text-right">
-                      <p className="text-gray-400 font-medium">Llega</p>
-                      <p className="text-white font-bold">{new Date(v.llegada_programada * 1000).toLocaleString()}</p>
+                      <p className="text-gray-400 font-medium">Llega · hora local {(ciudades.find((c:any) => c.id === v.id_destino) as any)?.codigo}</p>
+                      <p className="text-white font-bold">{formatFlightLocalTime(v.llegada_programada, (ciudades.find((c:any) => c.id === v.id_destino) as any)?.time_zone)}</p>
                    </div>
                 </div>
               </div>
@@ -426,6 +464,13 @@ export default function Boletos() {
                        
                        <div className="space-y-4 pt-2">
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Información del Pasajero</p>
+                          <label className="block text-xs text-gray-300">
+                            Capital desde donde compras
+                            <select value={buyerTimeZone} onChange={(event) => setBuyerTimeZone(event.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-white">
+                              {PURCHASE_CAPITALS.map(([capital, zone]) => <option key={capital} value={zone}>{capital}</option>)}
+                            </select>
+                          </label>
+                          <p className="text-xs text-gray-400">La ciudad de compra no cambia las horas del vuelo: salida y llegada se muestran en el horario local de cada aeropuerto.</p>
                           <div className="space-y-3">
                              <input 
                                 type="text" 

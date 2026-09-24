@@ -44,39 +44,26 @@ export default function Dashboard() {
           "X-Region": countryData.region || "America",
         };
 
-        const [cRes, vRes, bRes, aRes] = await Promise.all([
-          fetch("http://localhost:8080/api/ciudades", { headers: countryHeaders }),
-          fetch("http://localhost:8080/api/vuelos", { headers: countryHeaders }),
-          fetch("http://localhost:8080/api/boletos", { headers: countryHeaders }),
-          fetch("http://localhost:8080/api/aviones", { headers: countryHeaders }),
+        const [cRes, vRes, dRes] = await Promise.all([
+          fetch("/api/ciudades", { headers: countryHeaders }),
+          fetch("/api/vuelos", { headers: countryHeaders }),
+          fetch("/api/dashboard", { headers: countryHeaders }),
         ]);
 
-        if (cRes.ok && vRes.ok && bRes.ok && aRes.ok) {
+        if (cRes.ok && vRes.ok && dRes.ok) {
           const ciudades = await cRes.json();
           let vuelos = await vRes.json();
-          const boletos = await bRes.json();
-          const aviones = await aRes.json();
-
-          let sCount = 0;
-          let rCount = 0;
-          let iFirst = 0;
-          let iReg = 0;
-
-          boletos.forEach((b: any) => {
-            if (b.estado === "SALED") {
-              sCount++;
-              if (b.clase === "VIP") iFirst += b.costo;
-              else iReg += b.costo;
-            } else if (b.estado === "RESERVED") {
-              rCount++;
-            }
-          });
-          setSold(sCount);
-          setReserved(rCount);
-          setIncomeFirst(iFirst);
-          setIncomeRegular(iReg);
-
-          const formatFlights = vuelos.slice(0, 10).map((v: any) => {
+          const summary = await dRes.json();
+          setSold(summary.vendidos);
+          setReserved(summary.reservados);
+          setIncomeFirst(summary.ingresos_primera);
+          setIncomeRegular(summary.ingresos_turistica);
+          const visibleFlights = vuelos.slice(0, 10);
+          const availability = await Promise.all(visibleFlights.map(async (v: any) => {
+            const response = await fetch(`/api/dashboard/vuelos/${v.id}`, { headers: countryHeaders });
+            return response.ok ? response.json() : null;
+          }));
+          const formatFlights = visibleFlights.map((v: any, index: number) => {
             const destCiudad = ciudades.find((c: any) => c.id === v.id_destino);
             const destinationName = destCiudad ? (destCiudad.codigo + " " + destCiudad.pais).substring(0, 15).toUpperCase() : "UNKNOWN";
 
@@ -84,10 +71,7 @@ export default function Dashboard() {
             const timeStr = date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
             
             // Availability
-            const avion = aviones.find((a: any) => a.id === v.id_avion);
-            const capacity = avion ? (avion.asientos_regular + avion.asientos_vip) : 100;
-            const soldOrRes = boletos.filter((b: any) => b.id_vuelo === v.id && b.estado !== "ANNULLED").length;
-            const avail = Math.max(0, capacity - soldOrRes);
+            const avail = availability[index]?.disponibles ?? 0;
             
             let remarkKey = "dashboard.remarks.on_time";
             let color = "text-yellow-400 [text-shadow:0_0_8px_#facc15]";
