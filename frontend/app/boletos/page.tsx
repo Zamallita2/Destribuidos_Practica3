@@ -17,6 +17,7 @@ const PlaneModelViewer = dynamic(() => import("@/components/PlaneModelViewer"), 
 
 export default function Boletos() {
   const [ciudades, setCiudades] = useState([]);
+  const [aviones, setAviones] = useState<{ id: number; nombre: string }[]>([]);
   const [vuelos, setVuelos] = useState([]);
   const [asientos, setAsientos] = useState([]);
   const [precios, setPrecios] = useState<any>(null);
@@ -65,15 +66,17 @@ export default function Boletos() {
           "X-Region": countryData.region || "America"
         };
         
-        const [cRes, vRes, pRes] = await Promise.all([
+        const [cRes, vRes, pRes, aRes] = await Promise.all([
           fetch("/api/ciudades", { headers: countryHeaders }),
           fetch("/api/vuelos", { headers: countryHeaders }),
-          fetch("/api/precios", { headers: countryHeaders })
+          fetch("/api/precios", { headers: countryHeaders }),
+          fetch("/api/aviones", { headers: countryHeaders })
         ]);
 
         if (cRes.ok) setCiudades(await cRes.json());
         if (vRes.ok) setVuelos(await vRes.json());
         if (pRes.ok) setPrecios(await pRes.json());
+        if (aRes.ok) setAviones(await aRes.json());
       } catch (e) {
         console.error(e);
       } finally {
@@ -188,8 +191,14 @@ export default function Boletos() {
         if (ticket.replication_pending) {
           alert("El boleto quedó guardado, pero la confirmación de réplica está pendiente. Consulta su estado en Gestión de Boletos.");
         } else if (nuevoEstado === "SALED") {
-          const passResponse = await fetch(`/api/boletos/${ticket.id_boleto}/pase`);
-          if (passResponse.ok) setPurchasedPass(await passResponse.json());
+          try {
+            const passResponse = await fetch(`/api/boletos/${ticket.id_boleto}/pase`);
+            if (!passResponse.ok) throw new Error("pase_no_disponible");
+            setPurchasedPass(await passResponse.json());
+          } catch (passError) {
+            console.error(passError);
+            alert(`La compra del boleto #${ticket.id_boleto} quedó registrada, pero el pase no se pudo mostrar. Puedes consultarlo en Gestión de Boletos.`);
+          }
         }
         // Refresh seats
         await loadSeats(selectedVuelo);
@@ -197,6 +206,7 @@ export default function Boletos() {
       }
     } catch(e) {
       console.error(e);
+      alert("⚠️ No se pudo completar la solicitud. Revisa la conexión e inténtalo de nuevo.");
     } finally {
       setBookingLoading(false);
     }
@@ -347,7 +357,7 @@ export default function Boletos() {
                 </div>
 
                 <div className="mb-10">
-                   <PlaneModelViewer airplaneId={selectedVuelo.id_avion} />
+                   <PlaneModelViewer aircraftName={aviones.find((aircraft) => aircraft.id === selectedVuelo.id_avion)?.nombre} />
                 </div>
 
                 {/* DYNAMIC SCROLLABLE SEATING MAP */}
