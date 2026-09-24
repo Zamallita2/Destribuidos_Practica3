@@ -46,6 +46,7 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/boletos", handlers.ListBoletos)
 	api.GET("/boletos/:id/pase", handlers.GetBoardingPass)
 	api.GET("/boletos/:id/qr.png", handlers.GetBoardingQRCode)
+	api.GET("/boletos/:id/wallet/qr.png", handlers.GetWalletDownloadQRCode)
 	api.GET("/boletos/:id/validar", handlers.ValidateBoardingPass)
 	api.GET("/wallet/capabilities", handlers.WalletCapabilities)
 	api.GET("/boletos/:id/wallet/demo.pkpass", handlers.GetDemoWalletPass)

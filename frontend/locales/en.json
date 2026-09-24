@@ -37,9 +37,9 @@
     "dashboard": "Dashboard",
     "flights": "Flights",
     "tickets": "Tickets",
+    "ticketManagement": "Ticket Management",
     "routes": "Suggestions",
     "tsp": "Traveling Salesperson",
-    "settings": "Settings",
-    "tsp": "Traveler Agent"
+    "settings": "Settings"
   }
 }

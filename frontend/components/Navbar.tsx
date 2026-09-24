@@ -1,6 +1,6 @@
 "use client";
 
-import { Plane, LayoutDashboard, Ticket, Map, Settings } from "lucide-react";
+import { Plane, LayoutDashboard, Ticket, Map, Settings, FileText } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
@@ -14,6 +14,7 @@ export default function Navbar() {
     { href: "/", label: t("nav.dashboard"), icon: LayoutDashboard },
     { href: "/vuelos", label: t("nav.flights"), icon: Plane },
     { href: "/boletos", label: t("nav.tickets"), icon: Ticket },
+    { href: "/gestion-boletos", label: t("nav.ticketManagement"), icon: FileText },
     { href: "/sugerencias", label: t("nav.routes"), icon: Map },
     { href: "/tsp", label: t("nav.tsp"), icon: Map },
     { href: "/configuracion", label: t("nav.settings"), icon: Settings },

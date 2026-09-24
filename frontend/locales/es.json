@@ -37,9 +37,9 @@
     "dashboard": "Panel",
     "flights": "Vuelos",
     "tickets": "Boletos",
+    "ticketManagement": "Gestión de Boletos",
     "routes": "Sugerencias",
     "tsp": "Agente Viajero",
-    "settings": "Ajustes",
-    "tsp": "Agente Viajero"
+    "settings": "Ajustes"
   }
 }

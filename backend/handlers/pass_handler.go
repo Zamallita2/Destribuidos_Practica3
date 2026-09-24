@@ -63,6 +63,10 @@ func verificationURL(ticket models.Boleto) string {
 // In the classroom demo the frontend may be opened from a phone over the
 // local network. Prefer that reachable host over a localhost-only default.
 func verificationURLForRequest(c *gin.Context, ticket models.Boleto) string {
+	return fmt.Sprintf("%s/api/boletos/%d/validar?token=%s", publicBaseURLForRequest(c), ticket.IDBoleto, url.QueryEscape(passToken(ticket)))
+}
+
+func publicBaseURLForRequest(c *gin.Context) string {
 	base := strings.TrimRight(os.Getenv("PUBLIC_BASE_URL"), "/")
 	forwardedHost := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Host"), ",")[0])
 	host := forwardedHost
@@ -80,7 +84,11 @@ func verificationURLForRequest(c *gin.Context, ticket models.Boleto) string {
 	if base == "" {
 		base = "http://localhost:8080"
 	}
-	return fmt.Sprintf("%s/api/boletos/%d/validar?token=%s", base, ticket.IDBoleto, url.QueryEscape(passToken(ticket)))
+	return base
+}
+
+func walletDownloadURLForRequest(c *gin.Context, ticketID uint) string {
+	return fmt.Sprintf("%s/api/boletos/%d/wallet/demo.pkpass", publicBaseURLForRequest(c), ticketID)
 }
 
 func GetBoardingPass(c *gin.Context) {
@@ -126,6 +134,22 @@ func GetBoardingQRCode(c *gin.Context) {
 		return
 	}
 	png, err := qrcode.Encode(verificationURLForRequest(c, ticket), qrcode.Medium, 256)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "image/png", png)
+}
+
+// GetWalletDownloadQRCode points a phone to the pass file. The QR inside the
+// pass remains a separate boarding validation code.
+func GetWalletDownloadQRCode(c *gin.Context) {
+	_, ticket, ok := loadPurchasedTicket(c)
+	if !ok {
+		return
+	}
+	png, err := qrcode.Encode(walletDownloadURLForRequest(c, ticket.IDBoleto), qrcode.Medium, 256)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
