@@ -1,6 +1,7 @@
 /reports/*.csv
 /wallet-secrets/
 /.env
+/.env.distributed
 /backend/data/rejected_flights.log
 /backend/data/input-info.json
 /backend/data/qr-lan-url.txt

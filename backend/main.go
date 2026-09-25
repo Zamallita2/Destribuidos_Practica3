@@ -39,41 +39,46 @@ func main() {
 		db.EnsureBookingConstraints(db.PGEuropaAsia)
 	}
 	services.RestoreClocks()
-	seedAirportCatalog()
+	bootstrap := os.Getenv("CLUSTER_BOOTSTRAP") != "false"
+	if bootstrap {
+		seedAirportCatalog()
 
-	// Seed Matrix Data
-	seedMatrices(db.PGAmerica)
-	seedMatrices(db.PGEuropaAsia)
+		// Seed Matrix Data
+		seedMatrices(db.PGAmerica)
+		seedMatrices(db.PGEuropaAsia)
 
-	seedPrecios(db.PGAmerica)
-	seedPrecios(db.PGEuropaAsia)
+		seedPrecios(db.PGAmerica)
+		seedPrecios(db.PGEuropaAsia)
 
-	seedAsientos(db.PGAmerica)
-	seedAsientos(db.PGEuropaAsia)
-	reconcileLegacyFlights()
+		seedAsientos(db.PGAmerica)
+		seedAsientos(db.PGEuropaAsia)
+		reconcileLegacyFlights()
 
-	// Seed Flights from CSV dataset (auto-import, skips if already loaded)
-	csvPath := data.CSVPath()
-	if csvPath != "" {
-		reportPath := os.Getenv("REJECTED_CSV_PATH")
-		if reportPath == "" {
-			reportPath = filepath.Join("reports", "vuelos_rechazados.csv")
-		}
-		if count, err := data.GenerateRejectedCSV(csvPath, filepath.Join("data", "matrices.json"), reportPath); err != nil {
-			log.Printf("[Import] Cannot write rejection report: %v", err)
+		// Seed Flights from CSV dataset (auto-import, skips if already loaded)
+		csvPath := data.CSVPath()
+		if csvPath != "" {
+			reportPath := os.Getenv("REJECTED_CSV_PATH")
+			if reportPath == "" {
+				reportPath = filepath.Join("reports", "vuelos_rechazados.csv")
+			}
+			if count, err := data.GenerateRejectedCSV(csvPath, filepath.Join("data", "matrices.json"), reportPath); err != nil {
+				log.Printf("[Import] Cannot write rejection report: %v", err)
+			} else {
+				log.Printf("[Import] Rejection report: %s (%d rows)", reportPath, count)
+			}
+			if db.IsAvailable(db.PGAmerica) {
+				data.SeedFlightsFromCSV(db.PGAmerica, csvPath, "America")
+			}
+			if db.IsAvailable(db.PGEuropaAsia) {
+				data.SeedFlightsFromCSV(db.PGEuropaAsia, csvPath, "EuropaAsia")
+			}
 		} else {
-			log.Printf("[Import] Rejection report: %s (%d rows)", reportPath, count)
+			log.Println("[Seed Flights] WARNING: Dataset CSV not found. Place flights.csv in backend/data/ or dataset/ folder.")
 		}
-		if db.IsAvailable(db.PGAmerica) {
-			data.SeedFlightsFromCSV(db.PGAmerica, csvPath, "America")
-		}
-		if db.IsAvailable(db.PGEuropaAsia) {
-			data.SeedFlightsFromCSV(db.PGEuropaAsia, csvPath, "EuropaAsia")
-		}
+		seedDemoFlights()
 	} else {
-		log.Println("[Seed Flights] WARNING: Dataset CSV not found. Place flights.csv in backend/data/ or dataset/ folder.")
+		log.Println("[Cluster] Initial dataset bootstrap disabled on this API instance")
 	}
-	seedDemoFlights()
 
 	// Start Background Multi-Master Syncing Goroutine
 	go services.StartOutboxWorker()
@@ -86,9 +91,11 @@ func main() {
 	// available while the persisted outbox and snapshots catch up in the back.
 	go func() {
 		reconcilePostgresReplicas()
-		seedMongoMatrices()
-		bootstrapMongo(false)
-		pruneMongoOrphans()
+		if bootstrap {
+			seedMongoMatrices()
+			bootstrapMongo(false)
+			pruneMongoOrphans()
+		}
 	}()
 
 	r := gin.Default()
