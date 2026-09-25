@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { formatFlightLocalTime } from "@/lib/flightTime";
 
 type Stats = {
   capacidad: number;
@@ -42,8 +43,10 @@ export default function FlightDashboard() {
   if (error) return <div className="p-8 text-red-400">{error}</div>;
   if (!flight || !stats) return <div className="p-8 text-gray-400">Cargando panel del vuelo…</div>;
 
-  const origin = cities.find((city) => city.id === flight.id_origen)?.codigo || flight.id_origen;
-  const destination = cities.find((city) => city.id === flight.id_destino)?.codigo || flight.id_destino;
+  const originCity = cities.find((city) => city.id === flight.id_origen);
+  const destinationCity = cities.find((city) => city.id === flight.id_destino);
+  const origin = originCity?.codigo || flight.id_origen;
+  const destination = destinationCity?.codigo || flight.id_destino;
   const cards = [
     ["Capacidad", stats.capacidad],
     ["Vendidos", stats.vendidos],
@@ -57,7 +60,9 @@ export default function FlightDashboard() {
       <Link href="/vuelos" className="text-blue-400 hover:underline">← Volver a vuelos</Link>
       <div>
         <h1 className="text-3xl font-bold">Panel del vuelo AP {id}</h1>
-        <p className="text-gray-400">{origin} → {destination} · {new Date(flight.salida_programada * 1000).toLocaleString()} · Estado {flight.id_estado_vuelo}</p>
+        <p className="text-gray-400">{origin} → {destination} · Estado {flight.id_estado_vuelo}</p>
+        <p className="text-gray-400">Sale de {origin} (hora local): {formatFlightLocalTime(flight.salida_programada, originCity?.time_zone || "UTC")}</p>
+        <p className="text-gray-400">Llega a {destination} (hora local): {formatFlightLocalTime(flight.llegada_programada, destinationCity?.time_zone || "UTC")}</p>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {cards.map(([label, value]) => (

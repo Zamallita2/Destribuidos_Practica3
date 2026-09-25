@@ -90,8 +90,8 @@ func IsVectorDominant(clockA, clockB string) bool {
 }
 
 // ShouldApplyVersion preserves causal order. Concurrent versions use a
-// deterministic Lamport/node ordering; booking conflicts are handled by
-// the single writer and unique seat constraint instead.
+// deterministic Lamport/node ordering; booking conflicts are checked across
+// live PostgreSQL replicas before commit in the one-API deployment.
 func ShouldApplyVersion(incomingVector, existingVector string, incomingLamport, existingLamport int64,
 	incomingNode, existingNode string) bool {
 	if incomingVector != "" && existingVector != "" {

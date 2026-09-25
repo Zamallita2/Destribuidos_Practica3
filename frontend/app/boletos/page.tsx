@@ -37,7 +37,8 @@ export default function Boletos() {
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [buyerTimeZone, setBuyerTimeZone] = useState("America/Bogota");
-  const [purchasedPass, setPurchasedPass] = useState<{ id_boleto: number; pasajero: string; vuelo: number; asiento: string; qr_url: string; salida_local: string; llegada_local: string } | null>(null);
+  const [purchasedPass, setPurchasedPass] = useState<{ id_boleto: number; pasajero: string; vuelo: number; asiento: string; qr_url: string; salida_local: string; llegada_local: string; zona_salida: string; zona_llegada: string; origen: string; destino: string } | null>(null);
+  const [lastWrite, setLastWrite] = useState<{ ticketID: number; node: string } | null>(null);
   const [pdfDownloading, setPdfDownloading] = useState(false);
   const [walletCapabilities, setWalletCapabilities] = useState({ apple: false, google: false });
   const [googleWalletURL, setGoogleWalletURL] = useState("");
@@ -203,6 +204,7 @@ export default function Boletos() {
         alert(`⚠️ ${errData.error || "Error al procesar la reserva/compra"}`);
       } else {
         const ticket = await res.json();
+        setLastWrite({ ticketID: ticket.id_boleto, node: res.headers.get("X-Write-Node") || "" });
         if (ticket.replication_pending) {
           alert("El boleto quedó guardado, pero la confirmación de réplica está pendiente. Consulta su estado en Gestión de Boletos.");
         }
@@ -236,11 +238,13 @@ export default function Boletos() {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-5 duration-500 pb-20 max-w-7xl mx-auto">
+      {lastWrite && <p className="mb-5 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100">Boleto #{lastWrite.ticketID} registrado primero en <strong>{lastWrite.node === "pg_am" ? "PostgreSQL América" : lastWrite.node === "pg_eu" ? "PostgreSQL Europa/Asia" : "el servidor disponible"}</strong>. La sincronización con los demás nodos puede verse en el panel de Sincronización.</p>}
       {purchasedPass && <section role="dialog" aria-label="Pase de abordar" className="glass-panel mb-8 flex flex-wrap items-center justify-between gap-5 border border-emerald-500/40 p-6">
         <div>
           <h3 className="text-xl font-bold text-emerald-300">Compra confirmada · Pase de abordar #{purchasedPass.id_boleto}</h3>
           <p>{purchasedPass.pasajero} · Vuelo AP-{purchasedPass.vuelo} · Asiento {purchasedPass.asiento}</p>
-          <p className="text-sm text-gray-400">Salida: {purchasedPass.salida_local} · Llegada: {purchasedPass.llegada_local}</p>
+          <p className="text-sm text-gray-400">Sale de {purchasedPass.origen} (hora local): {formatFlightLocalTime(Math.floor(new Date(purchasedPass.salida_local).getTime() / 1000), purchasedPass.zona_salida)}</p>
+          <p className="text-sm text-gray-400">Llega a {purchasedPass.destino} (hora local): {formatFlightLocalTime(Math.floor(new Date(purchasedPass.llegada_local).getTime() / 1000), purchasedPass.zona_llegada)}</p>
           <p className="text-xs text-gray-400">El boleto visual se descarga como PDF. Puedes volver a obtenerlo desde Gestión de Boletos.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={() => downloadVisualTicket(purchasedPass.id_boleto)} disabled={pdfDownloading} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{pdfDownloading ? "Descargando PDF..." : "Descargar boleto visual (PDF)"}</button>
@@ -500,12 +504,12 @@ export default function Boletos() {
                        <div className="space-y-4 pt-2">
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Información del Pasajero</p>
                           <label className="block text-xs text-gray-300">
-                            Capital desde donde compras
+                            Capital desde donde compras (elige el servidor inicial)
                             <select value={buyerTimeZone} onChange={(event) => setBuyerTimeZone(event.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-2.5 text-white">
                               {PURCHASE_CAPITALS.map(([capital, zone]) => <option key={capital} value={zone}>{capital}</option>)}
                             </select>
                           </label>
-                          <p className="text-xs text-gray-400">La ciudad de compra no cambia las horas del vuelo: salida y llegada se muestran en el horario local de cada aeropuerto.</p>
+                          <p className="text-xs text-gray-400">América registra primero en PostgreSQL América; Europa y Asia en PostgreSQL Europa/Asia. El país de arriba solo elige de dónde se consultan las listas. La salida usa la hora del aeropuerto de origen y la llegada la del destino.</p>
                           <div className="space-y-3">
                              <input 
                                 type="text" 

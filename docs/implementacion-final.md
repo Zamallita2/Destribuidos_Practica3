@@ -18,7 +18,7 @@ Los asientos son indivisibles: se usa `round(plazas_comercializables × 0,73)` y
 
 En una primera carga de unos 30.000 vuelos, esa tarea puede durar varios minutos y la sincronización de sus eventos puede continuar después. Es normal ver el proceso activo: `docker compose up --build` mantiene la terminal unida a los servicios. Para dejarlo en segundo plano, usar `docker compose up -d --build`; revisar `docker compose logs --tail=30 backend` y `http://localhost:8080/api/health`. La API debe responder durante el llenado. Los eventos pendientes quedan en `sync_outbox` y se reintentan tras reiniciar, sin volver a importar los vuelos ya guardados.
 
-Los boletos posteriores se guardan como registros separados. La reserva usa una transacción, bloqueo del vuelo y un índice único sobre `(id_vuelo, id_asiento)` para estados activos. Un asiento ocupado en el manifiesto tampoco puede comprarse de nuevo. Una cancelación pasa por `REFUNDED` y queda disponible al vencer `REFUND_DELAY_MINUTES` (15 por defecto).
+Los boletos posteriores se guardan como registros separados. La capital de compra determina la PostgreSQL donde se registra primero el boleto: América o Europa/Asia. El ID del boleto usa el rango de la PostgreSQL que aceptó la escritura. La reserva usa una transacción, bloqueo del vuelo, una verificación de la otra réplica disponible y un índice único sobre `(id_vuelo, id_asiento)` para estados activos. Un bloqueo por vuelo en la API serializa compras de ambas regiones durante la replicación inmediata. Un asiento ocupado en el manifiesto tampoco puede comprarse de nuevo. Una cancelación pasa por `REFUNDED` y queda disponible al vencer `REFUND_DELAY_MINUTES` (15 por defecto).
 
 ## Sincronización y fallos
 
@@ -28,11 +28,11 @@ Cada publicador reclama el evento en una transacción breve, la cierra y luego l
 
 Si cae uno de los PostgreSQL, las lecturas y escrituras usan la copia del otro. Si cae MongoDB, las consultas de Asia recurren al PostgreSQL disponible. Una compra se confirma con HTTP 200 después de que exista una segunda copia; si solo quedó guardada localmente, responde HTTP 202 y muestra `replication_pending`. El `GET /api/health` publica el estado de los tres nodos. El asignador transaccional `id_allocators` evita consumir identificadores de dominio por transacciones revertidas, algo que `nextval()` no garantiza.
 
-Este diseño cubre la caída individual y posterior recuperación de un servicio. La garantía de evitar reservas dobles bajo una **partición de red con dos escritores activos e incomunicados** requeriría un mecanismo de consenso/fencing o un servicio de reservas con quórum; no debe presentarse como resuelto por relojes lógicos. El equipo debe probar exactamente ese límite si la rúbrica incluye particiones, además de detener procesos.
+Este diseño cubre la caída individual y posterior recuperación de un servicio con **una sola instancia de API**. La garantía de evitar reservas dobles bajo una **partición de red con dos escritores activos e incomunicados** o con varias API independientes requeriría un mecanismo de consenso/fencing o un servicio de reservas con quórum; no debe presentarse como resuelto por el bloqueo local ni por relojes lógicos. El equipo debe probar exactamente ese límite si la rúbrica incluye particiones, además de detener procesos.
 
 ## Zonas horarias
 
-Los tiempos se guardan como Unix UTC. `data/airports.json` indica la zona IANA de cada aeropuerto. El navegador muestra la salida en la zona del origen y la llegada en la zona del destino, independientemente de la capital de compra seleccionada. El boleto guarda `time_zone_compra` solo como contexto del comprador; no altera la hora del vuelo. El backend valida la zona IANA y el contenedor incluye `tzdata`.
+Los tiempos se guardan como Unix UTC. `data/airports.json` indica la zona IANA de cada aeropuerto. El navegador muestra la salida en la zona del origen y la llegada en la zona del destino, independientemente de la capital de compra seleccionada. El boleto guarda `time_zone_compra` como contexto del comprador y la usa para elegir la PostgreSQL inicial; no altera la hora del vuelo. El backend valida la zona IANA y el contenedor incluye `tzdata`.
 
 ## Pases y Wallet
 

@@ -2,14 +2,49 @@ package db
 
 import (
 	"errors"
+	"strings"
 
 	"airres-api/models"
 	"gorm.io/gorm"
 )
 
-// GetDBForFlightWrite makes the origin region the sole writer for one flight.
-// Replicas may serve reads, but a client-supplied region cannot choose a
-// different writer for the same seat.
+// PurchaseWriteOrder chooses the first PostgreSQL by the buyer's selected
+// capital. Flight origin remains the fallback for older API clients without
+// a purchase time zone. MongoDB is never a ticket writer.
+func PurchaseWriteOrder(purchaseTimeZone string, flightID uint) []string {
+	if strings.HasPrefix(purchaseTimeZone, "America/") {
+		return []string{"pg_am", "pg_eu"}
+	}
+	for _, prefix := range []string{"Europe/", "Asia/", "Africa/", "Australia/", "Pacific/"} {
+		if strings.HasPrefix(purchaseTimeZone, prefix) {
+			return []string{"pg_eu", "pg_am"}
+		}
+	}
+	if flightID >= 1000000000 {
+		return []string{"pg_eu", "pg_am"}
+	}
+	return []string{"pg_am", "pg_eu"}
+}
+
+func GetDBForFlightPurchase(flightID uint, purchaseTimeZone string) (*gorm.DB, models.Vuelo, error) {
+	var flight models.Vuelo
+	for _, node := range PurchaseWriteOrder(purchaseTimeZone, flightID) {
+		conn := PGAmerica
+		if node == "pg_eu" {
+			conn = PGEuropaAsia
+		}
+		if !IsAvailable(conn) {
+			continue
+		}
+		if err := conn.First(&flight, flightID).Error; err == nil {
+			return conn, flight, nil
+		}
+	}
+	return nil, flight, errors.New("vuelo_no_encontrado_o_nodos_no_disponibles")
+}
+
+// GetDBForFlightWrite routes flight metadata changes by the origin region.
+// New tickets use GetDBForFlightPurchase and the buyer's selected location.
 func GetDBForFlightWrite(flightID uint) (*gorm.DB, models.Vuelo, error) {
 	var flight models.Vuelo
 	preferred, backup := PGAmerica, PGEuropaAsia

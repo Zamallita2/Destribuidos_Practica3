@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"airres-api/db"
@@ -17,6 +18,17 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// One API process serves the one-PC Compose stack. Serialize purchases of a
+// flight across buyer regions until its synchronous replica attempt finishes.
+var bookingFlightLocks sync.Map
+
+func lockFlightBooking(flightID uint) func() {
+	value, _ := bookingFlightLocks.LoadOrStore(flightID, &sync.Mutex{})
+	lock := value.(*sync.Mutex)
+	lock.Lock()
+	return lock.Unlock
+}
 
 // ListAsientos returns all seats for a specific flight with their occupancy status
 func ListAsientos(c *gin.Context) {
@@ -121,7 +133,10 @@ func ReservarAsiento(c *gin.Context) {
 		return
 	}
 
-	dbConn, _, err := db.GetDBForFlightWrite(payload.IDVuelo)
+	unlock := lockFlightBooking(payload.IDVuelo)
+	defer unlock()
+
+	dbConn, _, err := db.GetDBForFlightPurchase(payload.IDVuelo, payload.PurchaseTimeZone)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Vuelo no encontrado o nodo propietario no disponible"})
 		return
@@ -159,6 +174,23 @@ func ReservarAsiento(c *gin.Context) {
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
+		// A recent sale can still be in the other PostgreSQL's outbox. Check
+		// both live copies while the flight lock is held before allocating an ID.
+		other := db.PGAmerica
+		if dbConn == db.PGAmerica {
+			other = db.PGEuropaAsia
+		}
+		if db.IsAvailable(other) {
+			checkContext, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+			defer cancel()
+			var replicated models.Boleto
+			if err := other.WithContext(checkContext).Where("id_vuelo = ? AND id_asiento = ? AND estado IN ?", payload.IDVuelo, payload.IDAsiento,
+				[]string{"RESERVED", "SALED", "REFUNDED"}).First(&replicated).Error; err == nil {
+				return errors.New("asiento_ocupado")
+			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
 		fare, err := services.FareForFlight(tx, &vuelo, asiento.Clase)
 		if err != nil {
 			return err
@@ -176,7 +208,7 @@ func ReservarAsiento(c *gin.Context) {
 			SourceNode:   services.NodeID,
 		}
 		namespace := "ticket_am"
-		if vuelo.ID >= 1000000000 {
+		if dbConn == db.PGEuropaAsia {
 			namespace = "ticket_eu"
 		}
 		serial, err := db.NextDomainID(tx, namespace)
@@ -197,6 +229,11 @@ func ReservarAsiento(c *gin.Context) {
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
+	writeNode := "pg_am"
+	if dbConn == db.PGEuropaAsia {
+		writeNode = "pg_eu"
+	}
+	c.Header("X-Write-Node", writeNode)
 	if err := services.ConfirmTicketReplication(dbConn, nuevoBoleto); err != nil {
 		c.JSON(http.StatusAccepted, gin.H{"id_boleto": nuevoBoleto.IDBoleto, "estado": nuevoBoleto.Estado, "replication_pending": true, "message": "Boleto guardado; confirmación de réplica pendiente"})
 		return

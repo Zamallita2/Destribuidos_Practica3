@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Ticket, Info, Loader2, ArrowRight, X, Search } from "lucide-react";
 import { formatFlightLocalTime } from "@/lib/flightTime";
 
@@ -176,15 +177,15 @@ export default function Vuelos() {
           </h2>
           <p className="text-gray-400 mt-2">Consulta los vuelos importados del CSV y los vuelos de demostración. Los registros históricos también aparecen aquí.</p>
         </div>
-        <button onClick={() => { fetchVuelos(); setShowAddModal(true); setErrorVuelo(null); setStopoverRoute([]); setCreationMode("direct"); }} className="btn-primary flex shrink-0 items-center justify-center gap-2 whitespace-nowrap">
+        <button onClick={() => { setShowAddModal(true); setErrorVuelo(null); setStopoverRoute([]); setCreationMode("direct"); }} className="btn-primary flex shrink-0 items-center justify-center gap-2 whitespace-nowrap">
             Nuevo Vuelo
         </button>
       </div>
 
       <div className="glass-panel p-6">
         {/* Modals and forms */}
-        {showAddModal && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-in fade-in">
+        {showAddModal && createPortal(
+          <div role="dialog" aria-modal="true" aria-label="Programar vuelo" className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center overflow-y-auto p-4">
              <div className="bg-[#1a1d2d] border border-gray-700/50 p-6 rounded-2xl w-full max-w-lg shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500" />
                 
@@ -251,7 +252,7 @@ export default function Vuelos() {
                        <select id="avion" className="w-full mt-1 bg-white/5 p-2 rounded border border-gray-700 text-white outline-none">
                           <option value="">Seleccione Avión...</option>
                           {aviones.map((a: any) => (
-                             <option key={a.id} value={a.id} className="text-black">{a.nombre} ({a.fabricante})</option>
+                             <option key={a.id} value={a.id} className="text-black">ID {a.id} · {a.nombre} ({a.fabricante})</option>
                           ))}
                        </select>
                      </div>
@@ -337,7 +338,7 @@ export default function Vuelos() {
                        <select id="avion" className="w-full mt-1 bg-white/5 p-2 rounded border border-gray-700 text-white outline-none">
                           <option value="">Seleccione Avión...</option>
                           {aviones.map((a: any) => (
-                             <option key={a.id} value={a.id} className="text-black">{a.nombre} ({a.fabricante})</option>
+                             <option key={a.id} value={a.id} className="text-black">ID {a.id} · {a.nombre} ({a.fabricante})</option>
                           ))}
                        </select>
                      </div>
@@ -472,7 +473,7 @@ export default function Vuelos() {
                    </button>
                 </div>
              </div>
-          </div>
+          </div>, document.body
         )}
 
         {selectedVuelo && (

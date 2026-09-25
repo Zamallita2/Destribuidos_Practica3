@@ -308,7 +308,8 @@ export default function GestionBoletos() {
                     <div><p className="text-xs text-blue-200">Asiento</p><p className="font-bold">{selectedPass.asiento}</p></div>
                     <div><p className="text-xs text-blue-200">Puerta</p><p className="font-bold">{selectedPass.puerta}</p></div>
                   </div>
-                  <p className="mt-4 text-xs text-blue-100">Salida local: {selectedPass.salida_local?.replace("T", " ").slice(0, 16)} · {selectedPass.zona_salida}</p>
+                  <p className="mt-4 text-xs text-blue-100">Sale de {selectedPass.origen} (hora local): {selectedPass.salida_local?.replace("T", " ").slice(0, 16)} · {selectedPass.zona_salida}</p>
+                  <p className="text-xs text-blue-100">Llega a {selectedPass.destino} (hora local): {selectedPass.llegada_local?.replace("T", " ").slice(0, 16)} · {selectedPass.zona_llegada}</p>
                   <figure className="mt-4 border-t border-white/20 pt-4 text-center"><img src={`/api/boletos/${selectedBoleto.id_boleto}/wallet/qr.png`} width={160} height={160} alt="QR para abrir la guía de descarga del pase" className="mx-auto rounded bg-white p-2" /><figcaption className="mt-2 text-xs">Escanea con la cámara del celular para abrir el pase</figcaption></figure>
                   <p className="mt-3 text-xs text-blue-100">El QR abre una página para descargar el pase y compartirlo desde Archivos a Passbook. Usa la cámara del celular, no el lector de códigos de la app. Ambos dispositivos deben estar en la misma red.</p>
                   <QRNetworkInfo />

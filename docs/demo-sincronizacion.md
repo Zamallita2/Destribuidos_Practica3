@@ -28,4 +28,4 @@ MongoDB es una copia para lectura y sincronización; una reserva requiere Postgr
 | América | PostgreSQL América | MongoDB (copia global) | PostgreSQL Europa/Asia (réplica) |
 | Europa o Asia | PostgreSQL Europa/Asia | MongoDB (copia global) | PostgreSQL América (réplica) |
 
-El país seleccionado decide la fuente para las listas; no filtra los vuelos por país. La propiedad de cada vuelo para escribir o reservar se decide por su **aeropuerto de origen**: América en PG América y Europa/Asia en PG Europa/Asia. MongoDB no acepta reservas.
+El país seleccionado decide la fuente para las listas; no filtra los vuelos por país. Los vuelos nuevos se crean en la PostgreSQL de su **aeropuerto de origen**. Un boleto nuevo se registra primero según la **capital de compra** seleccionada: América en PG América y Europa/Asia en PG Europa/Asia; si falta esa réplica, se usa la otra PostgreSQL cuando contiene el vuelo. MongoDB no acepta reservas.
