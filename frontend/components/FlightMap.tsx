@@ -58,7 +58,7 @@ export default function FlightMap() {
   useEffect(() => {
     const fetchVuelos = async () => {
       try {
-        const response = await fetch("http://localhost:8080/api/vuelos");
+        const response = await fetch("/api/vuelos");
         if (response.ok) {
           const data = await response.json();
           setVuelos(data);

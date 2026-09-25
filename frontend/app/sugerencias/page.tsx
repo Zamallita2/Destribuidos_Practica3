@@ -36,7 +36,7 @@ export default function DijkstraSugerencias() {
   const [activeTab, setActiveTab] = useState(0);
 
   useEffect(() => {
-    fetch("http://localhost:8080/api/ciudades", {
+    fetch("/api/ciudades", {
       headers: { "X-User-Country": "CO" }
     })
       .then(res => res.json())
@@ -56,7 +56,7 @@ export default function DijkstraSugerencias() {
     setResultados(null);
     setActiveTab(0);
     try {
-      const res = await fetch(`http://localhost:8080/api/sugerencias/${criterio}?origen=${origen}&destino=${destino}&clase=${clase}`, {
+      const res = await fetch(`/api/sugerencias/${criterio}?origen=${origen}&destino=${destino}&clase=${clase}`, {
         headers: { "X-User-Country": "CO" }
       });
       const data = await res.json();

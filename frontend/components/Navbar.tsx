@@ -4,17 +4,19 @@ import { Plane, LayoutDashboard, Ticket, Map, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { language, setLanguage, t } = useLanguage();
 
   const links = [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/vuelos", label: "Vuelos", icon: Plane },
-    { href: "/boletos", label: "Comprar Boleto", icon: Ticket },
-    { href: "/gestion-boletos", label: "Gestión Boletos", icon: Ticket },
-    { href: "/sugerencias", label: "Sugeridor de Rutas", icon: Map },
-    { href: "/configuracion", label: "Configuración", icon: Settings },
+    { href: "/", label: t("nav.dashboard"), icon: LayoutDashboard },
+    { href: "/vuelos", label: t("nav.flights"), icon: Plane },
+    { href: "/boletos", label: t("nav.tickets"), icon: Ticket },
+    { href: "/sugerencias", label: t("nav.routes"), icon: Map },
+    { href: "/tsp", label: t("nav.tsp"), icon: Map },
+    { href: "/configuracion", label: t("nav.settings"), icon: Settings },
   ];
 
   return (
@@ -24,7 +26,7 @@ export default function Navbar() {
           <Plane className="text-white w-6 h-6" />
         </div>
         <span className="text-xl font-bold font-heading tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
-          AirRes
+          Pabón
         </span>
       </div>
 
@@ -55,13 +57,34 @@ export default function Navbar() {
         })}
       </div>
 
-      <div className="mt-auto pt-8 flex items-center gap-3 px-2">
-        <div className="w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center overflow-hidden">
-           <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" alt="Admin" className="w-full h-full object-cover" />
+      <div className="mt-auto pt-4 px-2">
+        <div className="flex gap-2 mb-6 bg-black/40 p-1 rounded-lg border border-white/5">
+          <button
+            onClick={() => setLanguage("es")}
+            className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${
+              language === "es" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            ES
+          </button>
+          <button
+            onClick={() => setLanguage("en")}
+            className={`flex-1 py-1 text-xs font-bold rounded-md transition-all ${
+              language === "en" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
+            }`}
+          >
+            EN
+          </button>
         </div>
-        <div>
-          <p className="text-sm font-semibold">Admin Panel</p>
-          <p className="text-xs text-gray-500">v1.0.0</p>
+
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center overflow-hidden">
+             <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" alt="Admin" className="w-full h-full object-cover" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Administración</p>
+            <p className="text-xs text-gray-500">v1.0.0</p>
+          </div>
         </div>
       </div>
     </nav>

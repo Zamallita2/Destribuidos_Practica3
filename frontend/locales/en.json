@@ -1,0 +1,45 @@
+{
+  "dashboard": {
+    "title": "Main Dashboard",
+    "subtitle": "Overview of your airlines and flights status.",
+    "stats": {
+      "sold": "Total Seats Sold",
+      "reserved": "Total Reservations",
+      "availability": "Availability per Flight",
+      "income_first": "First Class Income",
+      "income_regular": "Economy Class Income"
+    },
+    "departures": "Departures",
+    "current_time": "Current Time",
+    "table": {
+      "time": "Time",
+      "destination": "Destination",
+      "flight": "Flight",
+      "avail": "Avail.",
+      "remarks": "Remarks"
+    },
+    "nodes": {
+      "title": "Nodes Status",
+      "latency": "Latency: ",
+      "health": "Health: "
+    },
+    "remarks": {
+      "on_time": "ON TIME",
+      "boarding": "BOARDING",
+      "departed": "DEPARTED",
+      "in_flight": "IN FLIGHT",
+      "landed": "LANDED",
+      "arrived": "ARRIVED",
+      "delayed": "DELAYED"
+    }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "flights": "Flights",
+    "tickets": "Tickets",
+    "routes": "Suggestions",
+    "tsp": "Traveling Salesperson",
+    "settings": "Settings",
+    "tsp": "Traveler Agent"
+  }
+}

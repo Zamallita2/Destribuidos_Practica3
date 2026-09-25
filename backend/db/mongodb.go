@@ -33,10 +33,19 @@ func InitMongoDB() {
 
 	err = client.Ping(ctx, nil)
 	if err != nil {
-		log.Fatal("Failed to ping mongo:", err)
+		log.Println("MongoDB unavailable at startup; waiting for recovery:", err)
 	}
 
 	MongoClient = client
 	MongoDatabase = client.Database(dbName)
 	log.Println("Connected to MongoDB")
+}
+
+func IsMongoAvailable() bool {
+	if MongoClient == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 700*time.Millisecond)
+	defer cancel()
+	return MongoClient.Ping(ctx, nil) == nil
 }

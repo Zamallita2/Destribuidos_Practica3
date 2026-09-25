@@ -2,3 +2,6 @@
 .env
 Dockerfile
 docker-compose.yml
+*.exe
+airres-api
+scratch/

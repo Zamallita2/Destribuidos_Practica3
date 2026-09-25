@@ -18,10 +18,10 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 )
-
 
 func main() {
 	// Initialize databases
@@ -29,38 +29,65 @@ func main() {
 	db.InitMongoDB()
 
 	// Perform AutoMigrate
-	if db.PGAmerica != nil {
-		db.PGAmerica.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{})
+	if db.IsAvailable(db.PGAmerica) {
+		db.PGAmerica.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{}, &models.SyncOutbox{}, &models.OcupacionVuelo{}, &models.MigrationMarker{}, &models.IDAllocator{})
+		db.EnsureBookingConstraints(db.PGAmerica)
 	}
-	if db.PGEuropaAsia != nil {
-		db.PGEuropaAsia.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{})
+	if db.IsAvailable(db.PGEuropaAsia) {
+		db.PGEuropaAsia.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{}, &models.SyncOutbox{}, &models.OcupacionVuelo{}, &models.MigrationMarker{}, &models.IDAllocator{})
+		db.EnsureBookingConstraints(db.PGEuropaAsia)
 	}
+	services.RestoreClocks()
+	seedAirportCatalog()
 
 	// Seed Matrix Data
 	seedMatrices(db.PGAmerica)
 	seedMatrices(db.PGEuropaAsia)
-	
+
 	seedPrecios(db.PGAmerica)
 	seedPrecios(db.PGEuropaAsia)
 
 	seedAsientos(db.PGAmerica)
 	seedAsientos(db.PGEuropaAsia)
+	reconcileLegacyFlights()
 
 	// Seed Flights from CSV dataset (auto-import, skips if already loaded)
 	csvPath := data.CSVPath()
 	if csvPath != "" {
-		data.SeedFlightsFromCSV(db.PGAmerica, csvPath)
-		data.SeedFlightsFromCSV(db.PGEuropaAsia, csvPath)
+		reportPath := os.Getenv("REJECTED_CSV_PATH")
+		if reportPath == "" {
+			reportPath = filepath.Join("reports", "vuelos_rechazados.csv")
+		}
+		if count, err := data.GenerateRejectedCSV(csvPath, filepath.Join("data", "matrices.json"), reportPath); err != nil {
+			log.Printf("[Import] Cannot write rejection report: %v", err)
+		} else {
+			log.Printf("[Import] Rejection report: %s (%d rows)", reportPath, count)
+		}
+		if db.IsAvailable(db.PGAmerica) {
+			data.SeedFlightsFromCSV(db.PGAmerica, csvPath, "America")
+		}
+		if db.IsAvailable(db.PGEuropaAsia) {
+			data.SeedFlightsFromCSV(db.PGEuropaAsia, csvPath, "EuropaAsia")
+		}
 	} else {
 		log.Println("[Seed Flights] WARNING: Dataset CSV not found. Place flights.csv in backend/data/ or dataset/ folder.")
 	}
-
-	// Seed MongoDB matrices
-	seedMongoMatrices()
-	syncPGSeatsToMongo()
+	seedDemoFlights()
 
 	// Start Background Multi-Master Syncing Goroutine
-	go services.StartSyncService()
+	go services.StartOutboxWorker()
+	go services.StartRefundWorker()
+	go seedMissingOccupancy()
+	go startReplicaReconciler()
+	go startRecoveryMonitor()
+	// A large existing dataset can take minutes to reconcile. Keep the API
+	// available while the persisted outbox and snapshots catch up in the back.
+	go func() {
+		reconcilePostgresReplicas()
+		seedMongoMatrices()
+		bootstrapMongo(false)
+		pruneMongoOrphans()
+	}()
 
 	r := gin.Default()
 
@@ -79,8 +106,17 @@ func main() {
 		if country == "" {
 			country = "Unknown"
 		}
+		am, eu, mongo := db.IsAvailable(db.PGAmerica), db.IsAvailable(db.PGEuropaAsia), db.IsMongoAvailable()
+		status := "ok"
+		if !am || !eu || !mongo {
+			status = "degraded"
+		}
+		if !am && !eu {
+			status = "unavailable"
+		}
 		c.JSON(200, gin.H{
-			"status":  "ok",
+			"status":  status,
+			"nodes":   gin.H{"postgres_america": am, "postgres_europa_asia": eu, "mongodb": mongo},
 			"message": "AirRes API is running",
 			"country": country,
 		})
@@ -91,7 +127,7 @@ func main() {
 }
 
 func seedMongoMatrices() {
-	if db.MongoDatabase == nil {
+	if !db.IsMongoAvailable() {
 		return
 	}
 
@@ -143,14 +179,8 @@ func seedMongoMatrices() {
 }
 
 func seedMatrices(dbConn *gorm.DB) {
-	if dbConn == nil {
+	if !db.IsAvailable(dbConn) {
 		return
-	}
-
-	var count int64
-	dbConn.Model(&models.DetallesVuelos{}).Count(&count)
-	if count > 0 {
-		return // Already seeded
 	}
 
 	path := filepath.Join("data", "matrices.json")
@@ -171,35 +201,48 @@ func seedMatrices(dbConn *gorm.DB) {
 		MatrizTiempos: travelTimesJSON,
 	}
 
-	if err := dbConn.Create(&detalles).Error; err != nil {
-		log.Printf("[Seed] Error inserting details: %v", err)
-	} else {
-		log.Printf("[Seed] Successfully seeded DetallesVuelos matrix into %s", dbConn.Name())
+	var existing models.DetallesVuelos
+	if err := dbConn.First(&existing).Error; err == gorm.ErrRecordNotFound {
+		if err := dbConn.Create(&detalles).Error; err != nil {
+			log.Printf("[Seed] Error inserting details: %v", err)
+		}
+	} else if err != nil {
+		log.Printf("[Seed] Error reading details: %v", err)
+	} else if string(existing.MatrizTiempos) != string(travelTimesJSON) {
+		if err := dbConn.Model(&existing).Update("matriz_tiempos", travelTimesJSON).Error; err != nil {
+			log.Printf("[Seed] Error updating details: %v", err)
+		}
 	}
 }
 
 func seedPrecios(dbConn *gorm.DB) {
-	if dbConn == nil {
+	if !db.IsAvailable(dbConn) {
 		return
 	}
 
 	path := filepath.Join("data", "matrices.json")
-	file, _ := os.ReadFile(path)
+	file, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("[Seed] Error reading prices: %v", err)
+		return
+	}
 	var data map[string]interface{}
-	json.Unmarshal(file, &data)
+	if err := json.Unmarshal(file, &data); err != nil {
+		log.Printf("[Seed] Error parsing prices: %v", err)
+		return
+	}
 
 	regJSON, _ := json.Marshal(data["economy_fares"])
 	vipJSON, _ := json.Marshal(data["first_class_fares"])
 
 	var existing models.Precios
-	err := dbConn.First(&existing).Error
+	err = dbConn.First(&existing).Error
 	if err != nil {
 		// No row at all - create
 		precios := models.Precios{MatrizPreciosRegular: regJSON, MatrizPreciosVip: vipJSON}
 		dbConn.Create(&precios)
 		log.Printf("[Seed] Created Precios matrix into %s", dbConn.Name())
-	} else if existing.MatrizPreciosRegular == nil || string(existing.MatrizPreciosRegular) == "null" {
-		// Row exists but data is null - update it
+	} else if string(existing.MatrizPreciosRegular) != string(regJSON) || string(existing.MatrizPreciosVip) != string(vipJSON) {
 		dbConn.Model(&existing).Updates(map[string]interface{}{
 			"matriz_precios_regular": regJSON,
 			"matriz_precios_vip":     vipJSON,
@@ -211,21 +254,23 @@ func seedPrecios(dbConn *gorm.DB) {
 }
 
 func seedAsientos(dbConn *gorm.DB) {
-	if dbConn == nil {
+	if !db.IsAvailable(dbConn) {
 		return
 	}
 	var count int64
 	dbConn.Model(&models.Asiento{}).Count(&count)
 	if count > 0 {
+		dbConn.Model(&models.Asiento{}).Where("estado <> ?", "AVAILABLE").Update("estado", "AVAILABLE")
 		return
 	}
 
 	var aviones []models.Avion
-	dbConn.Find(&aviones)
+	dbConn.Order("id").Find(&aviones)
 
 	for _, avion := range aviones {
 		log.Printf("[Seed] Generating seats for %s (VIP: %d, Regular: %d)", avion.Nombre, avion.AsientosVip, avion.AsientosRegular)
-		
+		seats := make([]models.Asiento, 0, avion.AsientosVip+avion.AsientosRegular)
+
 		// Generate VIP seats (Row 1 to X)
 		vipRows := (avion.AsientosVip / 4) + 1
 		for i := 0; i < avion.AsientosVip; i++ {
@@ -237,7 +282,7 @@ func seedAsientos(dbConn *gorm.DB) {
 				Estado:  "AVAILABLE",
 				Clase:   "VIP",
 			}
-			dbConn.Create(&seat)
+			seats = append(seats, seat)
 		}
 
 		// Generate Regular seats (Starting after VIP rows)
@@ -250,7 +295,11 @@ func seedAsientos(dbConn *gorm.DB) {
 				Estado:  "AVAILABLE",
 				Clase:   "REGULAR",
 			}
-			dbConn.Create(&seat)
+			seats = append(seats, seat)
+		}
+		if err := dbConn.CreateInBatches(&seats, 500).Error; err != nil {
+			log.Printf("[Seed] Could not seed seats for aircraft %d: %v", avion.ID, err)
+			return
 		}
 	}
 	log.Printf("[Seed] Successfully seeded Asientos into %s", dbConn.Name())
@@ -262,16 +311,24 @@ func syncPGSeatsToMongo() {
 	}
 	var seats []models.Asiento
 	db.PGAmerica.Find(&seats)
-	
+
 	if len(seats) == 0 {
 		return
 	}
 
 	coll := db.MongoDatabase.Collection("asientos")
 	ctx := context.Background()
-	
-	log.Printf("[Seed Mongo] Syncing %d seats from PG to Mongo with correct IDs...", len(seats))
-	
+
+	// Check if already synced
+	count, _ := coll.CountDocuments(ctx, bson.M{})
+	if count >= int64(len(seats)) {
+		log.Println("[Seed Mongo] Asientos already synced in Mongo, skipping bulk sync.")
+		return
+	}
+
+	log.Printf("[Seed Mongo] Syncing %d seats from PG to Mongo with bulk upsert...", len(seats))
+
+	var models []mongo.WriteModel
 	for _, seat := range seats {
 		filter := bson.M{"codigo": seat.Codigo, "id_avion": seat.IDAvion}
 		update := bson.M{"$set": bson.M{
@@ -281,11 +338,16 @@ func syncPGSeatsToMongo() {
 			"estado":   seat.Estado,
 			"clase":    seat.Clase,
 		}}
-		opts := options.Update().SetUpsert(true)
-		_, err := coll.UpdateOne(ctx, filter, update, opts)
+		model := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true)
+		models = append(models, model)
+	}
+
+	if len(models) > 0 {
+		_, err := coll.BulkWrite(ctx, models)
 		if err != nil {
-			log.Printf("[Seed Mongo] Error syncing seat %s: %v", seat.Codigo, err)
+			log.Printf("[Seed Mongo] Error in bulk sync: %v", err)
+		} else {
+			log.Printf("[Seed Mongo] Successfully bulk synced %d seats to MongoDB.", len(models))
 		}
 	}
-	log.Printf("[Seed Mongo] Successfully synced seats to MongoDB.")
 }

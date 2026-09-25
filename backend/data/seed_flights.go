@@ -2,10 +2,12 @@ package data
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,32 +29,37 @@ var statusMap = map[string]uint{
 	"DELAYED":   8,
 }
 
-// aircraftModelMap maps aircraft_id (1-50) to one of the 4 plane model IDs (1-4)
-// Distributes: 1-12 -> A380(1), 13-25 -> Boeing 777(2), 26-38 -> A350(3), 39-50 -> Boeing 787(4)
-func aircraftIDToModelID(aircraftID int) uint {
-	switch {
-	case aircraftID <= 12:
-		return 1
-	case aircraftID <= 25:
-		return 2
-	case aircraftID <= 38:
-		return 3
-	default:
-		return 4
-	}
+// MatricesJSON maps to matrices.json to check supported routes
+type MatricesJSON struct {
+	Airports        []string                       `json:"airports"`
+	TravelTime      map[string]map[string]float64  `json:"travel_time"`
+	EconomyFares    map[string]map[string]*float64 `json:"economy_fares"`
+	FirstClassFares map[string]map[string]*float64 `json:"first_class_fares"`
 }
 
-// SeedFlightsFromCSV loads the dataset CSV into the DB if the vuelos table is empty
-func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
-	if dbConn == nil {
-		return
+// RouteAvailability checks the selected direction. A route may sell either
+// class independently, but it must have a positive flight duration.
+func (m MatricesJSON) RouteAvailability(origin, destination string) (allowed, economy, vip bool, hours float64) {
+	if origin == destination {
+		return false, false, false, 0
 	}
+	hours = m.TravelTime[origin][destination]
+	if hours <= 0 {
+		return false, false, false, 0
+	}
+	ecoFare := m.EconomyFares[origin][destination]
+	firstFare := m.FirstClassFares[origin][destination]
+	economy = ecoFare != nil && *ecoFare > 0
+	vip = firstFare != nil && *firstFare > 0
+	if !economy && !vip {
+		return false, false, false, 0
+	}
+	return true, economy, vip, hours
+}
 
-	// Check if already seeded
-	var count int64
-	dbConn.Model(&models.Vuelo{}).Count(&count)
-	if count > 0 {
-		log.Printf("[Seed Flights] Vuelos already seeded (%d rows), skipping CSV import.", count)
+// SeedFlightsFromCSV adds missing supported rows without changing existing IDs.
+func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath, ownerRegion string) {
+	if dbConn == nil {
 		return
 	}
 
@@ -67,10 +74,41 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 	reader := csv.NewReader(f)
 	reader.TrimLeadingSpace = true
 
+	// Load matrices.json to validate routes (Rule 3)
+	var matrices MatricesJSON
+	matrixBytes, err := os.ReadFile(filepath.Join("data", "matrices.json"))
+	if err == nil {
+		if err := json.Unmarshal(matrixBytes, &matrices); err != nil {
+			log.Printf("[Seed Flights] Invalid matrices.json: %v", err)
+			return
+		}
+	} else {
+		log.Printf("[Seed Flights] Warning: could not read matrices.json: %v", err)
+		return
+	}
+
 	// Read header
 	if _, err := reader.Read(); err != nil {
 		log.Printf("[Seed Flights] Error reading CSV header: %v", err)
 		return
+	}
+
+	// Create a rejection log file
+	logFile, err := os.Create(filepath.Join("data", "rejected_flights.log"))
+	if err == nil {
+		defer logFile.Close()
+		logFile.WriteString("=== Registro de Vuelos Rechazados ===\n\n")
+	} else {
+		logFile = nil
+		log.Printf("[Seed Flights] Warning: could not create rejection log: %v", err)
+	}
+
+	// Helper function to write to log
+	logRejection := func(row []string, reason string) {
+		if logFile != nil {
+			flightInfo := strings.Join(row, ", ")
+			logFile.WriteString(fmt.Sprintf("RECHAZADO: %s | Motivo: %s\n", flightInfo, reason))
+		}
 	}
 
 	// Build ciudad lookup: codigo -> id
@@ -80,13 +118,43 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 	for _, c := range ciudades {
 		ciudadByCode[c.Codigo] = c.ID
 	}
+	var planes []models.Avion
+	dbConn.Select("id").Find(&planes)
+	validPlane := make(map[uint]bool, len(planes))
+	for _, plane := range planes {
+		validPlane[plane.ID] = true
+	}
 
 	// Build puerta lookup: puerta_str -> id
 	var puertas []models.Puerta
 	dbConn.Find(&puertas)
-	puertaByName := make(map[string]uint)
+	puertaByName := make(map[uint]map[string]uint)
+	fallbackGate := make(map[uint]uint)
 	for _, p := range puertas {
-		puertaByName[p.Puerta] = p.ID
+		if puertaByName[p.IDCiudad] == nil {
+			puertaByName[p.IDCiudad] = make(map[string]uint)
+		}
+		puertaByName[p.IDCiudad][p.Puerta] = p.ID
+		if fallbackGate[p.IDCiudad] == 0 {
+			fallbackGate[p.IDCiudad] = p.ID
+		}
+	}
+	if len(puertas) == 0 {
+		log.Printf("[Seed Flights] No gates available; import cancelled")
+		return
+	}
+
+	// Existing data may have been imported under the old both-fares rule.
+	// Count matching rows so even duplicate CSV records are treated correctly.
+	var existing []models.Vuelo
+	if err := dbConn.Select("id_avion", "id_origen", "id_destino", "salida_programada").Find(&existing).Error; err != nil {
+		log.Printf("[Seed Flights] Could not inspect existing flights: %v", err)
+		return
+	}
+	existingCounts := make(map[string]int, len(existing))
+	for _, v := range existing {
+		key := fmt.Sprintf("%d:%d:%d:%d", v.IDAvion, v.IDOrigen, v.IDDestino, v.SalidaProgramada)
+		existingCounts[key]++
 	}
 
 	// Parse location reference for timezone (we use UTC timestamps)
@@ -112,15 +180,15 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 		// Parse date: MM/DD/YY
 		dateStr := strings.TrimSpace(row[0])
 		timeStr := strings.TrimSpace(row[1])
-		origin  := strings.TrimSpace(row[2])
-		dest    := strings.TrimSpace(row[3])
+		origin := strings.TrimSpace(row[2])
+		dest := strings.TrimSpace(row[3])
 		acIDStr := strings.TrimSpace(row[4])
-		status  := strings.TrimSpace(row[5])
+		status := strings.TrimSpace(row[5])
 		gateStr := strings.TrimSpace(row[6])
 
 		// Parse aircraft_id
 		acID, err := strconv.Atoi(acIDStr)
-		if err != nil {
+		if err != nil || !validPlane[uint(acID)] {
 			skipped++
 			continue
 		}
@@ -131,6 +199,7 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 		if !okO || !okD {
 			// Unknown airport code — skip
 			skipped++
+			logRejection(row, fmt.Sprintf("Ciudad de origen (%s) o destino (%s) no existe en la base de datos", origin, dest))
 			continue
 		}
 
@@ -139,14 +208,16 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 			estadoID = 1 // default to SCHEDULED
 		}
 
-		puertaID, okP := puertaByName[gateStr]
+		puertaID, okP := puertaByName[originID][gateStr]
 		if !okP {
-			// Try matching by gate number (e.g. "G26" -> look for any puerta)
-			// We'll use a fallback: puerta index mod available puertas
-			puertaID = uint((i % len(puertas)) + 1)
+			puertaID = fallbackGate[originID]
+			if puertaID == 0 {
+				skipped++
+				continue
+			}
 		}
 
-		avionID := aircraftIDToModelID(acID)
+		avionID := uint(acID)
 
 		// Build the departure Unix timestamp from date + time
 		// CSV date is MM/DD/YY, time is H:MM (24h)
@@ -163,11 +234,33 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 
 		salidaUnix := t.Unix()
 
-		// Estimate arrival: salida + travel_time (we don't store it here, it's in the matrix)
-		// We'll just set llegada_programada = salida + 1h as placeholder (actual time is in matrix)
-		llegadaUnix := salidaUnix + 3600
+		// A fare in either class makes this directed route importable.
+		allowed, _, _, hours := matrices.RouteAvailability(origin, dest)
+		if !allowed {
+			skipped++
+			logRejection(row, fmt.Sprintf("La ruta de %s a %s no tiene duración o tarifa en ninguna clase", origin, dest))
+			continue
+		}
+		// Store each CSV flight only on the PostgreSQL node that owns its origin.
+		var originCity models.Ciudad
+		for _, city := range ciudades {
+			if city.ID == originID {
+				originCity = city
+				break
+			}
+		}
+		if (originCity.Region == "America") != (ownerRegion == "America") {
+			continue
+		}
+		llegadaUnix := salidaUnix + int64(hours*3600)
+		key := fmt.Sprintf("%d:%d:%d:%d", acID, originID, destID, salidaUnix)
+		if existingCounts[key] > 0 {
+			existingCounts[key]--
+			continue
+		}
 
 		vuelo := models.Vuelo{
+			ID:                uint(100000000 + i + 1),
 			IDOrigen:          originID,
 			IDDestino:         destID,
 			IDEstadoVuelo:     estadoID,
@@ -180,8 +273,44 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 			FechaSalida:       salidaUnix,
 			FechaLlegada:      llegadaUnix,
 		}
+		if ownerRegion != "America" {
+			vuelo.ID += 1000000000
+		}
 		vuelos = append(vuelos, vuelo)
 	}
+
+	// Rule 1: Set future flights to SCHEDULED (estado ID = 1)
+	now := time.Now().Unix()
+	for i := range vuelos {
+		if vuelos[i].SalidaProgramada > now {
+			vuelos[i].IDEstadoVuelo = 1
+		}
+	}
+
+	// Keep valid route data while recording discontinuities separately.
+	// Sort flights by aircraft ID, then by scheduled departure time
+	sort.Slice(vuelos, func(i, j int) bool {
+		if vuelos[i].IDAvion == vuelos[j].IDAvion {
+			return vuelos[i].SalidaProgramada < vuelos[j].SalidaProgramada
+		}
+		return vuelos[i].IDAvion < vuelos[j].IDAvion
+	})
+
+	var validVuelos []models.Vuelo
+
+	for _, v := range vuelos {
+		// Rule 2 is temporarily disabled as requested by user.
+		// We append all flights to validVuelos without checking lastDest.
+		validVuelos = append(validVuelos, v)
+	}
+
+	vuelos = validVuelos
+	log.Printf("[Seed Flights] Continuity does not reject CSV flights; run the diagnostic endpoint for anomalies.")
+
+	if logFile != nil {
+		logFile.WriteString(fmt.Sprintf("\n--- RESUMEN FINAL ---\n%d filas nuevas con al menos una clase tarifada. Discontinuidades: diagnóstico separado.\n", len(vuelos)))
+	}
+	log.Printf("[Seed Flights] Dataset loaded. Starting import of %d valid flights.", len(vuelos))
 
 	// Bulk insert in batches of 500 for performance
 	batchSize := 500
@@ -200,6 +329,28 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath string) {
 	}
 
 	log.Printf("[Seed Flights] Successfully imported %d vuelos (%d skipped).", total, skipped)
+	// Repair the one-hour placeholder used by earlier versions, in batches
+	// by directed route. This does not modify flight IDs or ticket references.
+	for from, destinations := range matrices.TravelTime {
+		for to, hours := range destinations {
+			if hours <= 0 {
+				continue
+			}
+			fromID, fromOK := ciudadByCode[from]
+			toID, toOK := ciudadByCode[to]
+			if !fromOK || !toOK {
+				continue
+			}
+			delta := int64(hours * 3600)
+			dbConn.Model(&models.Vuelo{}).
+				Where("id_origen = ? AND id_destino = ? AND llegada_programada <> salida_programada + ?", fromID, toID, delta).
+				Updates(map[string]interface{}{
+					"llegada_programada": gorm.Expr("salida_programada + ?", delta),
+					"fecha_llegada":      gorm.Expr("salida_programada + ?", delta),
+				})
+		}
+	}
+	dbConn.Model(&models.Vuelo{}).Where("salida_programada > ?", time.Now().Unix()).Update("id_estado_vuelo", 1)
 }
 
 // CSVPath returns the expected path to the flights CSV dataset.
