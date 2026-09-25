@@ -27,6 +27,7 @@ services:
       - DB_MONGO_NAME=airres_sync
       - PERCENTAGE_SOLD=73
       - REFUND_DELAY_MINUTES=15
+      - SEED_DEMO_FLIGHTS=false
       - BOARDING_PASS_SECRET=${BOARDING_PASS_SECRET:-demo-only-change-this-before-real-use-2026}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:3001}
       - QR_LAN_URL_FILE=/app/data/qr-lan-url.txt

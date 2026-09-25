@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Search, Info, User, Check, X, CreditCard, Plane, MapPin, Loader2, ArrowRight, Ticket } from "lucide-react";
 import dynamic from "next/dynamic";
 import { formatFlightLocalTime } from "@/lib/flightTime";
@@ -25,7 +25,10 @@ export default function Boletos() {
   
   const [selectedOrigin, setSelectedOrigin] = useState("");
   const [selectedDestination, setSelectedDestination] = useState("");
-  const [filteredVuelos, setFilteredVuelos] = useState([]);
+  const [filteredVuelos, setFilteredVuelos] = useState<any[]>([]);
+  const [flightIDSearch, setFlightIDSearch] = useState("");
+  const [flightSearchError, setFlightSearchError] = useState<string | null>(null);
+  const [flightSearchLoading, setFlightSearchLoading] = useState(false);
   
   const [selectedVuelo, setSelectedVuelo] = useState<any>(null);
   const [selectedSeat, setSelectedSeat] = useState<any>(null);
@@ -94,6 +97,8 @@ export default function Boletos() {
 
   const handleSearch = () => {
     if (!selectedOrigin || !selectedDestination) return;
+    setFlightIDSearch("");
+    setFlightSearchError(null);
     const filtered = vuelos.filter((v: any) => 
       v.id_origen === parseInt(selectedOrigin) && 
       v.id_destino === parseInt(selectedDestination) &&
@@ -114,6 +119,8 @@ export default function Boletos() {
 
   const loadSeats = async (vuelo: any) => {
     setSelectedVuelo(vuelo);
+    setSelectedSeat(null);
+    setAsientos([]);
     setLoading(true);
     try {
       const countryData = JSON.parse(localStorage.getItem("airres-country") || "{}");
@@ -122,11 +129,51 @@ export default function Boletos() {
         "X-Region": countryData.region || "America"
       };
       const res = await fetch(`/api/vuelos/${vuelo.id}/asientos`, { headers: countryHeaders });
-      if (res.ok) setAsientos(await res.json());
+      if (!res.ok) throw new Error("No se pudieron cargar los asientos de este vuelo.");
+      setAsientos(await res.json());
     } catch(e) {
       console.error(e);
+      setFlightSearchError("No se pudieron cargar los asientos de este vuelo. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFlightIDSearch = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const id = flightIDSearch.trim();
+    if (!/^[1-9]\d*$/.test(id) || Number(id) > 4294967295) {
+      setFlightSearchError("Ingresa un ID de vuelo válido.");
+      return;
+    }
+    setFlightSearchLoading(true);
+    setFlightSearchError(null);
+    setFilteredVuelos([]);
+    setSelectedVuelo(null);
+    setSelectedSeat(null);
+    setAsientos([]);
+    try {
+      const countryData = JSON.parse(localStorage.getItem("airres-country") || "{}");
+      const headers = {
+        "X-User-Country": countryData.name || "Estados Unidos",
+        "X-Region": countryData.region || "America"
+      };
+      const res = await fetch(`/api/vuelos?id=${encodeURIComponent(id)}&scope=all`, { headers });
+      if (!res.ok) throw new Error("No se pudo consultar el vuelo. Inténtalo de nuevo.");
+      const matches = await res.json();
+      const flight = matches.find((item: any) => String(item.id) === id);
+      if (!flight) {
+        setFlightSearchError(`No se encontró el vuelo AP-${id}.`);
+      } else if (![1, 8].includes(flight.id_estado_vuelo) || flight.salida_programada <= Math.floor(Date.now() / 1000)) {
+        setFlightSearchError(`El vuelo AP-${id} existe, pero ya no admite compras.`);
+      } else {
+        setFilteredVuelos([flight]);
+        await loadSeats(flight);
+      }
+    } catch (error) {
+      setFlightSearchError(error instanceof Error ? error.message : "No se pudo consultar el vuelo.");
+    } finally {
+      setFlightSearchLoading(false);
     }
   };
 
@@ -164,8 +211,8 @@ export default function Boletos() {
   };
 
   const procesarBoleto = async (nuevoEstado: string) => {
-    if (selectedVuelo && selectedVuelo.id_estado_vuelo >= 2) {
-      alert("⚠️ No se puede reservar ni comprar boletos para un vuelo que está en abordaje (Boarding) o posterior.");
+    if (selectedVuelo && ![1, 8].includes(selectedVuelo.id_estado_vuelo)) {
+      alert("⚠️ Este vuelo ya no admite reservas ni compras.");
       return;
     }
 
@@ -269,6 +316,17 @@ export default function Boletos() {
       </div>
 
       {/* SEARCH BAR */}
+      <form onSubmit={handleFlightIDSearch} className="glass-panel mb-5 flex flex-wrap items-end gap-3 border-blue-500/20 p-5">
+        <label htmlFor="flight-id-search" className="min-w-[220px] flex-1 text-sm font-semibold text-blue-200">
+          Buscar vuelo por ID
+          <input id="flight-id-search" type="number" min="1" inputMode="numeric" value={flightIDSearch} onChange={(event) => setFlightIDSearch(event.target.value)} placeholder="ID que aparece en Vuelos" className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none focus:border-blue-500" />
+        </label>
+        <button type="submit" disabled={flightSearchLoading} className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-500 disabled:opacity-50">
+          {flightSearchLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />} Buscar por ID
+        </button>
+        {flightSearchError && <p role="alert" className="w-full text-sm text-amber-300">{flightSearchError}</p>}
+      </form>
+      <p className="mb-5 text-center text-sm text-gray-400">También puedes buscar por origen y destino:</p>
       <div className="glass-panel p-6 mb-10 flex flex-wrap items-end gap-6 justify-center shadow-2xl border-white/5">
         <div className="flex-1 min-w-[250px]">
           <label className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 block">Origen</label>
@@ -346,6 +404,7 @@ export default function Boletos() {
                 onClick={() => loadSeats(v)}
                 className={`glass-panel p-5 cursor-pointer transition-all hover:border-blue-500/50 group ${selectedVuelo?.id === v.id ? 'border-blue-500 bg-blue-500/10' : 'hover:scale-[1.02]'}`}
               >
+                <p className="mb-3 text-xs font-semibold text-blue-300">Vuelo AP-{v.id}</p>
                 <div className="flex justify-between items-start mb-4">
                   <div className="bg-white/10 p-2 rounded-lg group-hover:bg-blue-500/20 transition">
                     <Plane className="w-6 h-6 text-blue-400" />
