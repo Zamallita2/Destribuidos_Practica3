@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
 	"airres-api/db"
 	"airres-api/models"
+	"airres-api/services"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -15,6 +17,9 @@ import (
 // bootstrapMongo reconciles the data lake with both relational databases.
 // Re-running it is safe: every document is replaced by its stable domain ID.
 func bootstrapMongo(overwrite bool) {
+	if !overwrite && services.InputImportActive.Load() {
+		return
+	}
 	if !db.IsMongoAvailable() || !db.IsAvailable(db.PGAmerica) || !db.IsAvailable(db.PGEuropaAsia) {
 		return
 	}
@@ -100,6 +105,9 @@ func upsertSnapshot[T any](collection string, records []T, filter func(T) bson.M
 		return err
 	}
 	for start := 0; start < len(records); start += 500 {
+		if !overwrite && services.InputImportActive.Load() {
+			return errors.New("importación de entradas en curso")
+		}
 		end := start + 500
 		if end > len(records) {
 			end = len(records)

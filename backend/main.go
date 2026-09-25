@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"airres-api/data"
@@ -80,6 +81,7 @@ func main() {
 	go seedMissingOccupancy()
 	go startReplicaReconciler()
 	go startRecoveryMonitor()
+	go startSyncMonitor()
 	// A large existing dataset can take minutes to reconcile. Keep the API
 	// available while the persisted outbox and snapshots catch up in the back.
 	go func() {
@@ -96,9 +98,19 @@ func main() {
 	config.AllowAllOrigins = true
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-User-Country", "X-Region"}
 	r.Use(cors.New(config))
+	r.Use(func(c *gin.Context) {
+		if services.InputImportActive.Load() && c.Request.URL.Path != "/api/health" && !strings.HasPrefix(c.Request.URL.Path, "/api/entradas") {
+			c.JSON(503, gin.H{"error": "Procesando nuevos datos de entrada; espera a que finalice"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	})
 
 	// Register Routes
 	routes.SetupRoutes(r)
+	registerInputRoutes(r)
+	r.GET("/api/sync/status", getSyncStatus)
 
 	// Health check endpoint
 	r.GET("/api/health", func(c *gin.Context) {

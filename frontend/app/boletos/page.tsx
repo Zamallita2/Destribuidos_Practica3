@@ -5,6 +5,7 @@ import { Search, Info, User, Check, X, CreditCard, Plane, MapPin, Loader2, Arrow
 import dynamic from "next/dynamic";
 import { formatFlightLocalTime } from "@/lib/flightTime";
 import { PURCHASE_CAPITALS } from "@/data/capitals";
+import QRNetworkInfo from "@/components/QRNetworkInfo";
 
 const PlaneModelViewer = dynamic(() => import("@/components/PlaneModelViewer"), { 
   ssr: false,
@@ -37,6 +38,7 @@ export default function Boletos() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [buyerTimeZone, setBuyerTimeZone] = useState("America/Bogota");
   const [purchasedPass, setPurchasedPass] = useState<{ id_boleto: number; pasajero: string; vuelo: number; asiento: string; qr_url: string; salida_local: string; llegada_local: string } | null>(null);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
   const [walletCapabilities, setWalletCapabilities] = useState({ apple: false, google: false });
   const [googleWalletURL, setGoogleWalletURL] = useState("");
 
@@ -147,6 +149,19 @@ export default function Boletos() {
     }
   };
 
+  const downloadVisualTicket = async (ticketID: number) => {
+    setPdfDownloading(true);
+    try {
+      const { downloadBoardingPassPdf } = await import("@/lib/boardingPassPdf");
+      await downloadBoardingPassPdf({ id_boleto: ticketID, estado: "SALED" });
+    } catch (error) {
+      console.error(error);
+      alert(`El boleto #${ticketID} quedó registrado, pero no se descargó el PDF. Puedes intentarlo de nuevo desde Gestión de Boletos.`);
+    } finally {
+      setPdfDownloading(false);
+    }
+  };
+
   const procesarBoleto = async (nuevoEstado: string) => {
     if (selectedVuelo && selectedVuelo.id_estado_vuelo >= 2) {
       alert("⚠️ No se puede reservar ni comprar boletos para un vuelo que está en abordaje (Boarding) o posterior.");
@@ -190,11 +205,14 @@ export default function Boletos() {
         const ticket = await res.json();
         if (ticket.replication_pending) {
           alert("El boleto quedó guardado, pero la confirmación de réplica está pendiente. Consulta su estado en Gestión de Boletos.");
-        } else if (nuevoEstado === "SALED") {
+        }
+        if (nuevoEstado === "SALED") {
           try {
             const passResponse = await fetch(`/api/boletos/${ticket.id_boleto}/pase`);
             if (!passResponse.ok) throw new Error("pase_no_disponible");
-            setPurchasedPass(await passResponse.json());
+            const pass = await passResponse.json();
+            setPurchasedPass(pass);
+            await downloadVisualTicket(ticket.id_boleto);
           } catch (passError) {
             console.error(passError);
             alert(`La compra del boleto #${ticket.id_boleto} quedó registrada, pero el pase no se pudo mostrar. Puedes consultarlo en Gestión de Boletos.`);
@@ -223,20 +241,27 @@ export default function Boletos() {
           <h3 className="text-xl font-bold text-emerald-300">Compra confirmada · Pase de abordar #{purchasedPass.id_boleto}</h3>
           <p>{purchasedPass.pasajero} · Vuelo AP-{purchasedPass.vuelo} · Asiento {purchasedPass.asiento}</p>
           <p className="text-sm text-gray-400">Salida: {purchasedPass.salida_local} · Llegada: {purchasedPass.llegada_local}</p>
-          <p className="text-xs text-gray-400">El QR queda visible sin conexión en una billetera compatible. Para verificar su vigencia al escanearlo se necesita conexión.</p>
-          <a href={`/api/boletos/${purchasedPass.id_boleto}/wallet/demo.pkpass`} className="mr-4 mt-3 inline-block rounded bg-white px-4 py-2 text-sm font-semibold text-black">Añadir a mi Billetera / Descargar Pase</a>
-          <p className="mt-2 text-xs text-gray-400">Abre el archivo .pkpass descargado con una app compatible. Apple Wallet oficial requiere firma de emisor.</p>
+          <p className="text-xs text-gray-400">El boleto visual se descarga como PDF. Puedes volver a obtenerlo desde Gestión de Boletos.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={() => downloadVisualTicket(purchasedPass.id_boleto)} disabled={pdfDownloading} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{pdfDownloading ? "Descargando PDF..." : "Descargar boleto visual (PDF)"}</button>
+            <a href={`/pase/${purchasedPass.id_boleto}/billetera`} className="rounded bg-white px-4 py-2 text-sm font-semibold text-black">Abrir pase para Passbook</a>
+            <a href={`/gestion-boletos?boleto=${purchasedPass.id_boleto}`} className="rounded border border-white/20 px-4 py-2 text-sm font-semibold text-white">Ver en Gestión de Boletos</a>
+          </div>
+          <p className="mt-2 text-xs text-gray-400">En iPhone, descarga el ZIP y comparte el .pkpass desde Archivos a Passbook. Apple Wallet oficial requiere firma de emisor.</p>
           {walletCapabilities.apple && <a href={`/api/boletos/${purchasedPass.id_boleto}/wallet/apple.pkpass`} className="mr-4 mt-3 inline-block rounded bg-white px-4 py-2 text-sm font-semibold text-black">Añadir a Apple Wallet</a>}
           {googleWalletURL && <a href={googleWalletURL} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block rounded bg-white px-4 py-2 text-sm font-semibold text-black">Añadir a Google Wallet</a>}
           <button onClick={() => setPurchasedPass(null)} className="mt-3 text-sm text-blue-300 underline">Cerrar</button>
         </div>
-        <img src={purchasedPass.qr_url} width={180} height={180} alt="Código QR verificable del pase" className="rounded bg-white p-2" />
+        <figure className="text-center text-xs text-gray-300"><img src={`/api/boletos/${purchasedPass.id_boleto}/wallet/qr.png`} width={160} height={160} alt="QR para abrir la guía de descarga del pase" className="mx-auto mb-2 rounded bg-white p-2" /><figcaption>Escanea con la cámara del celular para abrir el pase</figcaption></figure>
+        <p className="w-full text-xs text-gray-400">El QR abre una página con la descarga y los pasos para importar el pase en Passbook. Usa la cámara del celular, no el lector de códigos de la app. Ambos dispositivos deben estar en la misma red.</p>
+        <QRNetworkInfo />
       </section>}
       <div className="mb-10 text-center">
         <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 flex items-center justify-center gap-3">
           <Ticket className="text-blue-500 w-10 h-10" /> Venta de Boletos
         </h2>
         <p className="text-gray-400 mt-3 text-lg">Busca tu destino, selecciona tu asiento y vuela con Pabon-go.</p>
+        <a href="/gestion-boletos" className="mt-4 inline-block rounded-lg border border-blue-400/40 px-4 py-2 text-sm font-semibold text-blue-300 hover:bg-blue-500/10">Ya compré un boleto · Ir a Gestión de Boletos</a>
       </div>
 
       {/* SEARCH BAR */}
