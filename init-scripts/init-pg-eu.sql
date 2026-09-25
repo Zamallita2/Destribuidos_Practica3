@@ -75,63 +75,30 @@ INSERT INTO estados_vuelo (nombre) VALUES
 ('SCHEDULED'), ('BOARDING'), ('DEPARTED'), ('IN_FLIGHT'), ('LANDED'), ('ARRIVED'), ('CANCELLED'), ('DELAYED')
 ON CONFLICT DO NOTHING;
 
--- 4 modelos de avion, 50 instancias fisicas (aircraft_id 1-50 del CSV)
--- IDs 1-12: A380, 13-25: Boeing 777, 26-38: A350, 39-50: Boeing 787
+-- 50 instancias fisicas (aircraft_id 1-50 del CSV)
+-- IDs 1-6: A380 (6x), 7-24: Boeing 777 (18x), 25-35: A350 (11x), 36-50: Boeing 787 (15x)
 INSERT INTO aviones (nombre, asientos_regular, asientos_vip, fabricante) VALUES 
--- A380 instances (IDs 1-12)
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
-('Airbus A380-800', 439, 10, 'Airbus'),
--- Boeing 777 instances (IDs 13-25)
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
-('Boeing 777-300ER', 300, 10, 'Boeing'),
--- A350 instances (IDs 26-38)
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
-('Airbus A350-900', 250, 12, 'Airbus'),
--- Boeing 787 instances (IDs 39-50)
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
-('Boeing 787-9 Dreamliner', 220, 8, 'Boeing')
+-- A380 instances (IDs 1-6)
+('Airbus A380-800', 439, 10, 'Airbus'), ('Airbus A380-800', 439, 10, 'Airbus'), ('Airbus A380-800', 439, 10, 'Airbus'),
+('Airbus A380-800', 439, 10, 'Airbus'), ('Airbus A380-800', 439, 10, 'Airbus'), ('Airbus A380-800', 439, 10, 'Airbus'),
+-- Boeing 777 instances (IDs 7-24)
+('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'),
+('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'), ('Boeing 777-300ER', 300, 10, 'Boeing'),
+-- A350 instances (IDs 25-35)
+('Airbus A350-900', 250, 12, 'Airbus'), ('Airbus A350-900', 250, 12, 'Airbus'), ('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'), ('Airbus A350-900', 250, 12, 'Airbus'), ('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'), ('Airbus A350-900', 250, 12, 'Airbus'), ('Airbus A350-900', 250, 12, 'Airbus'),
+('Airbus A350-900', 250, 12, 'Airbus'), ('Airbus A350-900', 250, 12, 'Airbus'),
+-- Boeing 787 instances (IDs 36-50)
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'),
+('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing'), ('Boeing 787-9 Dreamliner', 220, 8, 'Boeing')
 ON CONFLICT DO NOTHING;
 
 -- Ciudades representativas

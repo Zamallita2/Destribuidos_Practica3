@@ -1,0 +1,44 @@
+{
+  "dashboard": {
+    "title": "Panel General",
+    "subtitle": "Visión general del estado de tus aerolíneas y vuelos.",
+    "stats": {
+      "sold": "Total Asientos Vendidos",
+      "reserved": "Total de Reservas",
+      "availability": "Disponibilidad por Vuelo",
+      "income_first": "Ingresos Primera Clase",
+      "income_regular": "Ingresos Clase Turística"
+    },
+    "departures": "Salidas",
+    "current_time": "Hora Actual",
+    "table": {
+      "time": "Hora",
+      "destination": "Destino",
+      "flight": "Vuelo",
+      "avail": "Disp.",
+      "remarks": "Observación"
+    },
+    "nodes": {
+      "title": "Estado de Nodos",
+      "latency": "Latencia: ",
+      "health": "Salud: "
+    },
+    "remarks": {
+      "on_time": "A TIEMPO",
+      "boarding": "ABORDANDO",
+      "departed": "DESPEGÓ",
+      "in_flight": "EN VUELO",
+      "landed": "ATERRIZÓ",
+      "arrived": "LLEGÓ",
+      "delayed": "RETRASADO"
+    }
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "flights": "Vuelos",
+    "tickets": "Boletos",
+    "routes": "Sugerencias",
+    "settings": "Ajustes",
+    "tsp": "Agente Viajero"
+  }
+}

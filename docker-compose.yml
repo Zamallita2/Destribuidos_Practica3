@@ -5,7 +5,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080/api
     depends_on:
@@ -25,6 +25,8 @@ services:
       - DB_PG2_DSN=host=postgres_eu user=postgres password=root dbname=airres_eu port=5432 sslmode=disable
       - DB_MONGO_URI=mongodb://root:root@mongodb:27017/
       - DB_MONGO_NAME=airres_sync
+      - PERCENTAGE_SOLD=73
+      - REFUND_DELAY_MINUTES=15
     depends_on:
       postgres_am:
         condition: service_healthy

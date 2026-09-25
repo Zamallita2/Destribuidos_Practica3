@@ -2,16 +2,20 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"airres-api/db"
 	"airres-api/models"
 	"airres-api/services"
+
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ListAsientos returns all seats for a specific flight with their occupancy status
@@ -113,67 +117,100 @@ func ReservarAsiento(c *gin.Context) {
 	tag := c.GetHeader("X-User-Country")
 	dbConn, region := db.GetDBForCountry(tag)
 
-	// Validate flight status: Cannot buy/reserve if flight state >= BOARDING (2)
-	var vuelo models.Vuelo
-	if region == "Asia" && db.MongoDatabase != nil {
-		coll := db.MongoDatabase.Collection("vuelos")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		coll.FindOne(ctx, bson.M{"id": payload.IDVuelo}).Decode(&vuelo)
-	} else if dbConn != nil {
-		dbConn.First(&vuelo, payload.IDVuelo)
-	}
+	var nuevoBoleto models.Boleto
 
-	if vuelo.IDEstadoVuelo >= 2 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No se pueden comprar ni reservar boletos para un vuelo que ya está en proceso de abordaje, despegue o finalizado."})
-		return
-	}
-
-	// Check if seat is already taken FOR THIS SPECIFIC FLIGHT
-	var existingBoleto models.Boleto
 	if region == "Asia" && db.MongoDatabase != nil {
-		coll := db.MongoDatabase.Collection("boletos")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		coll.FindOne(ctx, bson.M{
+		// Mongo Logic
+		var vuelo models.Vuelo
+		collV := db.MongoDatabase.Collection("vuelos")
+		ctxV, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		collV.FindOne(ctxV, bson.M{"id": payload.IDVuelo}).Decode(&vuelo)
+		
+		if vuelo.IDEstadoVuelo >= 2 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No se pueden comprar ni reservar boletos para un vuelo que ya está en proceso de abordaje, despegue o finalizado."})
+			return
+		}
+
+		var existingBoleto models.Boleto
+		collB := db.MongoDatabase.Collection("boletos")
+		ctxB, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		collB.FindOne(ctxB, bson.M{
 			"id_vuelo":   payload.IDVuelo,
 			"id_asiento": payload.IDAsiento,
 			"estado":     bson.M{"$ne": "ANNULLED"},
 		}).Decode(&existingBoleto)
-	} else if dbConn != nil {
-		dbConn.Where("id_vuelo = ? AND id_asiento = ? AND estado != ?", payload.IDVuelo, payload.IDAsiento, "ANNULLED").First(&existingBoleto)
-	}
 
-	if existingBoleto.IDBoleto != 0 {
-		c.JSON(http.StatusConflict, gin.H{"error": "El asiento ya está reservado o vendido para este vuelo."})
-		return
-	}
-
-	// Create Boleto
-	nuevoBoleto := models.Boleto{
-		NombrePasajero: payload.NombrePasajero,
-		EmailPasajero:  payload.EmailPasajero,
-		Pasaporte:      payload.Pasaporte,
-		TiempoDeViaje:  payload.TiempoDeViaje,
-		IDVuelo:        payload.IDVuelo,
-		IDAsiento:      payload.IDAsiento,
-		Costo:          payload.Costo,
-		Estado:         payload.EstadoDeseado,
-	}
-
-	nuevoBoleto.LamportClock = services.GlobalLamportClock.Tick()
-	
-	if region == "Asia" && db.MongoDatabase != nil {
-		coll := db.MongoDatabase.Collection("boletos")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		if nuevoBoleto.IDBoleto == 0 {
-			count, _ := coll.CountDocuments(ctx, bson.M{})
-			nuevoBoleto.IDBoleto = uint(count + 1)
+		if existingBoleto.IDBoleto != 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "El asiento ya está reservado o vendido para este vuelo."})
+			return
 		}
-		coll.InsertOne(ctx, nuevoBoleto)
-	} else if dbConn != nil {
-		dbConn.Create(&nuevoBoleto)
-	}
-	go services.SendSyncEvent("CREATE", "Boleto", &nuevoBoleto, nuevoBoleto.LamportClock)
 
+		nuevoBoleto = models.Boleto{
+			NombrePasajero: payload.NombrePasajero,
+			EmailPasajero:  payload.EmailPasajero,
+			Pasaporte:      payload.Pasaporte,
+			TiempoDeViaje:  payload.TiempoDeViaje,
+			IDVuelo:        payload.IDVuelo,
+			IDAsiento:      payload.IDAsiento,
+			Costo:          payload.Costo,
+			Estado:         payload.EstadoDeseado,
+		}
+		nuevoBoleto.LamportClock = services.GlobalLamportClock.Tick()
+		nuevoBoleto.VectorClock = services.TickVectorClock()
+
+		ctxC, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		count, _ := collB.CountDocuments(ctxC, bson.M{})
+		nuevoBoleto.IDBoleto = uint(count + 1)
+		collB.InsertOne(ctxC, nuevoBoleto)
+
+	} else if dbConn != nil {
+		// PostgreSQL Logic with Transaction (Concurrency Control)
+		err := dbConn.Transaction(func(tx *gorm.DB) error {
+			// Lock the flight row with FOR UPDATE
+			var vuelo models.Vuelo
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&vuelo, payload.IDVuelo).Error; err != nil {
+				return err
+			}
+			
+			if vuelo.IDEstadoVuelo >= 2 {
+				return errors.New("vuelo_cerrado")
+			}
+
+			// Check existing boleto
+			var existingBoleto models.Boleto
+			tx.Where("id_vuelo = ? AND id_asiento = ? AND estado != ?", payload.IDVuelo, payload.IDAsiento, "ANNULLED").First(&existingBoleto)
+			if existingBoleto.IDBoleto != 0 {
+				return errors.New("asiento_ocupado")
+			}
+
+			nuevoBoleto = models.Boleto{
+				NombrePasajero: payload.NombrePasajero,
+				EmailPasajero:  payload.EmailPasajero,
+				Pasaporte:      payload.Pasaporte,
+				TiempoDeViaje:  payload.TiempoDeViaje,
+				IDVuelo:        payload.IDVuelo,
+				IDAsiento:      payload.IDAsiento,
+				Costo:          payload.Costo,
+				Estado:         payload.EstadoDeseado,
+			}
+			nuevoBoleto.LamportClock = services.GlobalLamportClock.Tick()
+			nuevoBoleto.VectorClock = services.TickVectorClock()
+			return tx.Create(&nuevoBoleto).Error
+		})
+
+		if err != nil {
+			if err.Error() == "vuelo_cerrado" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "No se pueden comprar ni reservar boletos para un vuelo que ya está en proceso de abordaje, despegue o finalizado."})
+			} else if err.Error() == "asiento_ocupado" {
+				c.JSON(http.StatusConflict, gin.H{"error": "El asiento ya está reservado o vendido para este vuelo."})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error interno al procesar reserva"})
+			}
+			return
+		}
+	}
+
+	go services.SendSyncEvent("CREATE", "Boleto", &nuevoBoleto, nuevoBoleto.LamportClock, nuevoBoleto.VectorClock)
 	c.JSON(http.StatusOK, nuevoBoleto)
 }
 
@@ -220,6 +257,7 @@ func CancelarReserva(c *gin.Context) {
 	// Cambiar Boleto a Anulado
 	boleto.Estado = "ANNULLED"
 	boleto.LamportClock = services.GlobalLamportClock.Tick()
+	boleto.VectorClock = services.TickVectorClock()
 
 	if region == "Asia" && db.MongoDatabase != nil {
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
@@ -228,7 +266,7 @@ func CancelarReserva(c *gin.Context) {
 		dbConn.Save(&boleto)
 	}
 
-	go services.SendSyncEvent("UPDATE", "Boleto", &boleto, boleto.LamportClock)
+	go services.SendSyncEvent("UPDATE", "Boleto", &boleto, boleto.LamportClock, boleto.VectorClock)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Reserva cancelada. El asiento procesará disponibilidad en los ecosistemas (retraso 15s) debido a política de reembolso."})
 }
@@ -315,6 +353,7 @@ func UpdateEstadoBoleto(c *gin.Context) {
 
 	boleto.Estado = payload.Estado
 	boleto.LamportClock = services.GlobalLamportClock.Tick()
+	boleto.VectorClock = services.TickVectorClock()
 
 	if region == "Asia" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("boletos")
@@ -324,6 +363,6 @@ func UpdateEstadoBoleto(c *gin.Context) {
 		dbConn.Save(&boleto)
 	}
 
-	go services.SendSyncEvent("UPDATE", "Boleto", &boleto, boleto.LamportClock)
+	go services.SendSyncEvent("UPDATE", "Boleto", &boleto, boleto.LamportClock, boleto.VectorClock)
 	c.JSON(http.StatusOK, boleto)
 }
