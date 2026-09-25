@@ -24,18 +24,26 @@ var seedPassengerNames = []string{
 	"João Pereira", "Inês Costa", "Kwame Mensah", "Olena Kovalenko",
 }
 
-var matrixHashOnce sync.Once
+var matrixHashMu sync.Mutex
 var matrixHash string
 
 func CurrentMatrixHash() string {
-	matrixHashOnce.Do(func() {
+	matrixHashMu.Lock()
+	defer matrixHashMu.Unlock()
+	if matrixHash == "" {
 		content, err := os.ReadFile("data/matrices.json")
 		if err == nil {
 			sum := sha256.Sum256(content)
 			matrixHash = hex.EncodeToString(sum[:])
 		}
-	})
+	}
 	return matrixHash
+}
+
+func ResetMatrixHash() {
+	matrixHashMu.Lock()
+	matrixHash = ""
+	matrixHashMu.Unlock()
 }
 
 // OccupancyTargets uses the nearest whole seat because capacities such as 228

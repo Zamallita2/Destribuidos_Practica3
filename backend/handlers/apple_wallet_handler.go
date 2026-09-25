@@ -171,10 +171,10 @@ func passPackage(ticket models.Boleto, flight models.Vuelo, origin, destination 
 	return archive.Bytes(), nil
 }
 
-func GetDemoWalletPass(c *gin.Context) {
+func buildDemoWalletPass(c *gin.Context) (uint, []byte, bool) {
 	conn, ticket, ok := loadPurchasedTicket(c)
 	if !ok {
-		return
+		return 0, nil, false
 	}
 	var flight models.Vuelo
 	var origin, destination models.Ciudad
@@ -182,16 +182,49 @@ func GetDemoWalletPass(c *gin.Context) {
 	var gate models.Puerta
 	if conn.First(&flight, ticket.IDVuelo).Error != nil || conn.First(&origin, flight.IDOrigen).Error != nil || conn.First(&destination, flight.IDDestino).Error != nil || conn.First(&seat, ticket.IDAsiento).Error != nil || conn.First(&gate, flight.IDPuerta).Error != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Datos del pase incompletos"})
-		return
+		return 0, nil, false
 	}
 	packageBytes, err := demoPassPackageForURL(ticket, flight, origin, destination, seat, gate, verificationURLForRequest(c, ticket))
 	if err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return 0, nil, false
+	}
+	return ticket.IDBoleto, packageBytes, true
+}
+
+func GetDemoWalletPass(c *gin.Context) {
+	ticketID, packageBytes, ok := buildDemoWalletPass(c)
+	if !ok {
 		return
 	}
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=AP-%d-demo.pkpass", ticket.IDBoleto))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=AP-%d-demo.pkpass", ticketID))
 	c.Header("Cache-Control", "no-store")
 	c.Data(http.StatusOK, "application/vnd.apple.pkpass", packageBytes)
+}
+
+// Safari opens a bare .pkpass in Apple Wallet. Wrapping it in ZIP lets the
+// visitor save the same demo pass to Files and share it with a third-party app.
+func GetDemoWalletPassZip(c *gin.Context) {
+	ticketID, packageBytes, ok := buildDemoWalletPass(c)
+	if !ok {
+		return
+	}
+	var archive bytes.Buffer
+	writer := zip.NewWriter(&archive)
+	entry, err := writer.Create(fmt.Sprintf("AP-%d-demo.pkpass", ticketID))
+	if err == nil {
+		_, err = entry.Write(packageBytes)
+	}
+	if closeErr := writer.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo preparar la descarga"})
+		return
+	}
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=AP-%d-para-Passbook.zip", ticketID))
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "application/zip", archive.Bytes())
 }
 
 func GetAppleWalletPass(c *gin.Context) {

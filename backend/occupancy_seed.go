@@ -31,6 +31,9 @@ func seedMissingOccupancy() {
 			rangeCondition = " AND v.id >= 1000000000"
 		}
 		for {
+			if services.InputImportActive.Load() {
+				return
+			}
 			var flights []models.Vuelo
 			err := conn.Raw(`SELECT v.* FROM vuelos v LEFT JOIN ocupaciones_vuelo o ON o.id_vuelo = v.id
 				WHERE v.id > ? AND (o.id_vuelo IS NULL OR o.matrix_hash <> ?)`+rangeCondition+` ORDER BY v.id LIMIT 100`, lastID, services.CurrentMatrixHash()).Scan(&flights).Error

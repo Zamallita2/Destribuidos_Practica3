@@ -81,10 +81,16 @@ func runOutboxWorker(currentDB func() *gorm.DB) {
 }
 
 func drainOutbox(conn *gorm.DB) {
+	if InputImportActive.Load() {
+		return
+	}
 	if !db.IsAvailable(conn) {
 		return
 	}
 	for i := 0; i < 500; i++ {
+		if InputImportActive.Load() {
+			return
+		}
 		var row models.SyncOutbox
 		leaseUntil := time.Now().Add(30 * time.Second).Unix()
 		err := conn.Transaction(func(tx *gorm.DB) error {

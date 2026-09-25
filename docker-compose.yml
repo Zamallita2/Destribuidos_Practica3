@@ -28,7 +28,8 @@ services:
       - PERCENTAGE_SOLD=73
       - REFUND_DELAY_MINUTES=15
       - BOARDING_PASS_SECRET=${BOARDING_PASS_SECRET:-demo-only-change-this-before-real-use-2026}
-      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:8080}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:3001}
+      - QR_LAN_URL_FILE=/app/data/qr-lan-url.txt
       - APPLE_PASS_TYPE_ID=${APPLE_PASS_TYPE_ID:-}
       - APPLE_TEAM_ID=${APPLE_TEAM_ID:-}
       - APPLE_PASS_CERT_PATH=${APPLE_PASS_CERT_PATH:-}
@@ -45,7 +46,8 @@ services:
         condition: service_started
     volumes:
       - ./backend/uploads:/app/uploads
-      - ./dataset:/app/dataset:ro
+      - ./backend/data:/app/data
+      - ./dataset:/app/dataset
       - ./reports:/app/reports
       - ./wallet-secrets:/run/wallet-secrets:ro
     networks:

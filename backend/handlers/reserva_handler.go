@@ -254,19 +254,20 @@ func ListBoletos(c *gin.Context) {
 	if tag == "" {
 		tag = c.GetHeader("X-User-Country")
 	}
-	_, region := db.GetDBForCountry(tag)
+	dbConn, region := db.GetDBForCountry(tag)
+	c.Header("X-Data-Source", region)
 
 	boletos := []models.Boleto{}
-	if region == "Asia" && db.MongoDatabase != nil {
+	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("boletos")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		cursor, _ := coll.Find(ctx, bson.M{})
 		cursor.All(ctx, &boletos)
+	} else if dbConn != nil {
+		dbConn.Find(&boletos)
 	} else {
-		dbConn, _ := db.GetDBForCountry(tag)
-		if dbConn != nil {
-			dbConn.Find(&boletos)
-		}
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Ningún servidor disponible para consultar boletos"})
+		return
 	}
 	c.JSON(http.StatusOK, boletos)
 }

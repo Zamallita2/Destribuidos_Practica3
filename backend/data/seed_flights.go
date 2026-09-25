@@ -59,15 +59,21 @@ func (m MatricesJSON) RouteAvailability(origin, destination string) (allowed, ec
 
 // SeedFlightsFromCSV adds missing supported rows without changing existing IDs.
 func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath, ownerRegion string) {
+	if _, err := ImportFlightsFromCSV(dbConn, csvPath, filepath.Join("data", "matrices.json"), ownerRegion); err != nil {
+		log.Printf("[Seed Flights] Import failed: %v", err)
+	}
+}
+
+// ImportFlightsFromCSV imports one region and reports write failures to the caller.
+func ImportFlightsFromCSV(dbConn *gorm.DB, csvPath, matrixPath, ownerRegion string) (int, error) {
 	if dbConn == nil {
-		return
+		return 0, fmt.Errorf("nodo %s no disponible", ownerRegion)
 	}
 
 	// Open CSV
 	f, err := os.Open(csvPath)
 	if err != nil {
-		log.Printf("[Seed Flights] WARNING: Could not open CSV at %s: %v", csvPath, err)
-		return
+		return 0, fmt.Errorf("abrir CSV: %w", err)
 	}
 	defer f.Close()
 
@@ -76,21 +82,18 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath, ownerRegion string) {
 
 	// Load matrices.json to validate routes (Rule 3)
 	var matrices MatricesJSON
-	matrixBytes, err := os.ReadFile(filepath.Join("data", "matrices.json"))
+	matrixBytes, err := os.ReadFile(matrixPath)
 	if err == nil {
 		if err := json.Unmarshal(matrixBytes, &matrices); err != nil {
-			log.Printf("[Seed Flights] Invalid matrices.json: %v", err)
-			return
+			return 0, fmt.Errorf("matrices inválidas: %w", err)
 		}
 	} else {
-		log.Printf("[Seed Flights] Warning: could not read matrices.json: %v", err)
-		return
+		return 0, fmt.Errorf("leer matrices: %w", err)
 	}
 
 	// Read header
 	if _, err := reader.Read(); err != nil {
-		log.Printf("[Seed Flights] Error reading CSV header: %v", err)
-		return
+		return 0, fmt.Errorf("encabezado CSV: %w", err)
 	}
 
 	// Create a rejection log file
@@ -140,16 +143,14 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath, ownerRegion string) {
 		}
 	}
 	if len(puertas) == 0 {
-		log.Printf("[Seed Flights] No gates available; import cancelled")
-		return
+		return 0, fmt.Errorf("no hay puertas disponibles")
 	}
 
 	// Existing data may have been imported under the old both-fares rule.
 	// Count matching rows so even duplicate CSV records are treated correctly.
 	var existing []models.Vuelo
 	if err := dbConn.Select("id_avion", "id_origen", "id_destino", "salida_programada").Find(&existing).Error; err != nil {
-		log.Printf("[Seed Flights] Could not inspect existing flights: %v", err)
-		return
+		return 0, fmt.Errorf("consultar vuelos existentes: %w", err)
 	}
 	existingCounts := make(map[string]int, len(existing))
 	for _, v := range existing {
@@ -162,8 +163,7 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath, ownerRegion string) {
 
 	records, err := reader.ReadAll()
 	if err != nil {
-		log.Printf("[Seed Flights] Error reading CSV records: %v", err)
-		return
+		return 0, fmt.Errorf("leer filas CSV: %w", err)
 	}
 
 	log.Printf("[Seed Flights] Importing %d flights from CSV...", len(records))
@@ -322,7 +322,7 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath, ownerRegion string) {
 		}
 		batch := vuelos[start:end]
 		if err := dbConn.Create(&batch).Error; err != nil {
-			log.Printf("[Seed Flights] Error inserting batch starting at %d: %v", start, err)
+			return total, fmt.Errorf("insertar lote %d: %w", start, err)
 		} else {
 			total += len(batch)
 		}
@@ -351,6 +351,7 @@ func SeedFlightsFromCSV(dbConn *gorm.DB, csvPath, ownerRegion string) {
 		}
 	}
 	dbConn.Model(&models.Vuelo{}).Where("salida_programada > ?", time.Now().Unix()).Update("id_estado_vuelo", 1)
+	return total, nil
 }
 
 // CSVPath returns the expected path to the flights CSV dataset.

@@ -5,3 +5,9 @@ docker-compose.yml
 *.exe
 airres-api
 scratch/
+uploads/
+data/rejected_flights.log
+data/input-info.json
+data/qr-lan-url.txt
+data/qr-lan-url.txt.tmp
+data/qr-network-watcher.pid

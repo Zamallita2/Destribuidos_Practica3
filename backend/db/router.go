@@ -1,14 +1,27 @@
 package db
 
 import (
-	"log"
-
 	"airres-api/config"
-
 	"gorm.io/gorm"
 )
 
-// GetDBForCountry returns the appropriate Postgres Database connection and the region name
+// ResolveReadSource keeps regional PostgreSQL primary, MongoDB as the global
+// read-only fallback, and the other PostgreSQL as a final replicated fallback.
+func ResolveReadSource(region string, available func(string) bool) string {
+	order := []string{"pg_eu", "mongo", "pg_am"}
+	if region == "America" {
+		order = []string{"pg_am", "mongo", "pg_eu"}
+	}
+	for _, source := range order {
+		if available(source) {
+			return source
+		}
+	}
+	return "none"
+}
+
+// GetDBForCountry resolves the source for region-based reads. The second
+// return value is "Mongo" when the global snapshot serves the request.
 func GetDBForCountry(countryOrRegion string) (*gorm.DB, string) {
 	region := countryOrRegion
 	// If it's not a known region code, try to map from country name
@@ -16,29 +29,24 @@ func GetDBForCountry(countryOrRegion string) (*gorm.DB, string) {
 		region = config.GetRegionFromCountry(countryOrRegion)
 	}
 
-	if region == "America" && IsAvailable(PGAmerica) {
-		log.Printf("[Router] Route request to PG America\n")
-		return PGAmerica, "America"
-	}
-
-	if region == "Europa" && IsAvailable(PGEuropaAsia) {
-		log.Printf("[Router] Route request to PG Europa\n")
-		return PGEuropaAsia, "Europa"
-	}
-
-	if region == "Asia" {
-		if IsMongoAvailable() {
-			return nil, "Asia"
+	source := ResolveReadSource(region, func(node string) bool {
+		switch node {
+		case "pg_am":
+			return IsAvailable(PGAmerica)
+		case "pg_eu":
+			return IsAvailable(PGEuropaAsia)
+		case "mongo":
+			return IsMongoAvailable()
 		}
-		if IsAvailable(PGEuropaAsia) {
-			return PGEuropaAsia, "Europa"
-		}
-	}
-	if IsAvailable(PGAmerica) {
+		return false
+	})
+	switch source {
+	case "pg_am":
 		return PGAmerica, "America"
-	}
-	if IsAvailable(PGEuropaAsia) {
+	case "pg_eu":
 		return PGEuropaAsia, "Europa"
+	case "mongo":
+		return nil, "Mongo"
 	}
 	return nil, region
 }

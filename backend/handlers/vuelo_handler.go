@@ -27,6 +27,7 @@ func GetAllVuelos(c *gin.Context) {
 		tag = c.GetHeader("X-User-Country")
 	}
 	dbConn, region := db.GetDBForCountry(tag)
+	c.Header("X-Data-Source", region)
 
 	vuelos := []models.Vuelo{}
 	limit := 100
@@ -58,7 +59,7 @@ func GetAllVuelos(c *gin.Context) {
 	var total int64
 	var importedCount, demoCount int64
 
-	if region == "Asia" && db.MongoDatabase != nil {
+	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("vuelos")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -161,7 +162,7 @@ func GetAllCiudades(c *gin.Context) {
 	dbConn, region := db.GetDBForCountry(tag)
 
 	ciudades := []models.Ciudad{}
-	if region == "Asia" && db.MongoDatabase != nil {
+	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("ciudades")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		cursor, _ := coll.Find(ctx, bson.M{})
@@ -182,7 +183,7 @@ func GetAllAviones(c *gin.Context) {
 	dbConn, region := db.GetDBForCountry(tag)
 
 	aviones := []models.Avion{}
-	if region == "Asia" && db.MongoDatabase != nil {
+	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("aviones")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		cursor, _ := coll.Find(ctx, bson.M{})
@@ -203,7 +204,7 @@ func GetTiempos(c *gin.Context) {
 	dbConn, region := db.GetDBForCountry(tag)
 
 	var detalles models.DetallesVuelos
-	if region == "Asia" && db.MongoDatabase != nil {
+	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("detalles_vuelos")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		var result map[string]interface{}
@@ -232,7 +233,7 @@ func GetPrecios(c *gin.Context) {
 	dbConn, region := db.GetDBForCountry(tag)
 
 	var precios models.Precios
-	if region == "Asia" && db.MongoDatabase != nil {
+	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("precios")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		var result map[string]interface{}
@@ -345,10 +346,29 @@ func GetVuelo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID inválido"})
 		return
 	}
-	_, flight, err := db.GetDBForFlightWrite(uint(id))
+	owner := db.PGAmerica
+	if id >= 1000000000 {
+		owner = db.PGEuropaAsia
+	}
+	if !db.IsAvailable(owner) && db.IsMongoAvailable() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var snapshot models.Vuelo
+		if err := db.MongoDatabase.Collection("vuelos").FindOne(ctx, bson.M{"id": uint(id)}).Decode(&snapshot); err == nil {
+			c.Header("X-Data-Source", "Mongo")
+			c.JSON(http.StatusOK, snapshot)
+			return
+		}
+	}
+	conn, flight, err := db.GetDBForFlightWrite(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Vuelo no encontrado"})
 		return
+	}
+	if conn == db.PGAmerica {
+		c.Header("X-Data-Source", "America")
+	} else {
+		c.Header("X-Data-Source", "Europa")
 	}
 	c.JSON(http.StatusOK, flight)
 }
