@@ -33,7 +33,7 @@ func getMatricesFromDB(region string) (map[string]map[string]float64, map[string
 	var detalles models.DetallesVuelos
 	var precios models.Precios
 
-	if reg == "Asia" && db.MongoDatabase != nil {
+	if reg == "Mongo" && db.MongoDatabase != nil {
 		collDetalles := db.MongoDatabase.Collection("detalles_vuelos")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		var resDetalles map[string]interface{}

@@ -14,6 +14,7 @@ import {
   FileText,
 } from "lucide-react";
 import { downloadBoardingPassPdf } from "@/lib/boardingPassPdf";
+import QRNetworkInfo from "@/components/QRNetworkInfo";
 
 export default function GestionBoletos() {
   const [boletos, setBoletos] = useState<any[]>([]);
@@ -279,9 +280,9 @@ export default function GestionBoletos() {
 
                 <div className="flex flex-wrap gap-2">
                 {selectedBoleto.estado === "SALED" && <a
-                  href={`/api/boletos/${selectedBoleto.id_boleto}/wallet/demo.pkpass`}
+                  href={`/pase/${selectedBoleto.id_boleto}/billetera`}
                   className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-600/20 px-4 py-2 text-sm font-bold text-emerald-300 hover:bg-emerald-600/30"
-                >Descargar pase .pkpass</a>}
+                >Abrir pase para Passbook</a>}
                 {selectedBoleto.estado === "SALED" && <button
                   onClick={exportarBoletoPDF}
                   disabled={updating}
@@ -308,11 +309,9 @@ export default function GestionBoletos() {
                     <div><p className="text-xs text-blue-200">Puerta</p><p className="font-bold">{selectedPass.puerta}</p></div>
                   </div>
                   <p className="mt-4 text-xs text-blue-100">Salida local: {selectedPass.salida_local?.replace("T", " ").slice(0, 16)} · {selectedPass.zona_salida}</p>
-                  <div className="mt-4 flex flex-wrap items-start gap-4 border-t border-white/20 pt-4">
-                    <figure className="text-center"><img src={selectedPass.qr_url} width={130} height={130} alt="QR de abordaje" className="rounded bg-white p-2" /><figcaption className="mt-1 text-xs">Validación de abordaje</figcaption></figure>
-                    <figure className="text-center"><img src={`/api/boletos/${selectedBoleto.id_boleto}/wallet/qr.png`} width={130} height={130} alt="QR para descargar el pase" className="rounded bg-white p-2" /><figcaption className="mt-1 text-xs">Descargar .pkpass en celular</figcaption></figure>
-                  </div>
-                  <p className="mt-3 text-xs text-blue-100">Para escanear desde otro celular, abre esta web usando la IP local de tu computadora. Ambos dispositivos deben estar en la misma red.</p>
+                  <figure className="mt-4 border-t border-white/20 pt-4 text-center"><img src={`/api/boletos/${selectedBoleto.id_boleto}/wallet/qr.png`} width={160} height={160} alt="QR para abrir la guía de descarga del pase" className="mx-auto rounded bg-white p-2" /><figcaption className="mt-2 text-xs">Escanea con la cámara del celular para abrir el pase</figcaption></figure>
+                  <p className="mt-3 text-xs text-blue-100">El QR abre una página para descargar el pase y compartirlo desde Archivos a Passbook. Usa la cámara del celular, no el lector de códigos de la app. Ambos dispositivos deben estar en la misma red.</p>
+                  <QRNetworkInfo />
                 </section>}
                 <div>
                   <label className="text-[10px] uppercase text-gray-500 font-bold tracking-widest block mb-1">

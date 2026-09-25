@@ -1,2 +1,9 @@
 /reports/*.csv
 /wallet-secrets/
+/.env
+/backend/data/rejected_flights.log
+/backend/data/input-info.json
+/backend/data/qr-lan-url.txt
+/backend/data/qr-lan-url.txt.tmp
+/backend/data/qr-network-watcher.pid
+/backend/uploads/

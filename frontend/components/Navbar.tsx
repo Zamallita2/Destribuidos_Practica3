@@ -1,6 +1,6 @@
 "use client";
 
-import { Plane, LayoutDashboard, Ticket, Map, Settings, FileText } from "lucide-react";
+import { Plane, LayoutDashboard, Ticket, Map, Settings, FileText, DatabaseZap, Activity } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
@@ -17,11 +17,13 @@ export default function Navbar() {
     { href: "/gestion-boletos", label: t("nav.ticketManagement"), icon: FileText },
     { href: "/sugerencias", label: t("nav.routes"), icon: Map },
     { href: "/tsp", label: t("nav.tsp"), icon: Map },
+    { href: "/sincronizacion", label: t("nav.sync"), icon: Activity },
+    { href: "/entradas", label: t("nav.inputs"), icon: DatabaseZap },
     { href: "/configuracion", label: t("nav.settings"), icon: Settings },
   ];
 
-  return (
-    <nav className="w-64 glass-panel border-y-0 border-l-0 rounded-none h-full flex flex-col p-4 relative z-50">
+  return <>
+    <nav className="hidden md:flex w-64 glass-panel border-y-0 border-l-0 rounded-none h-full flex-col p-4 relative z-50">
       <div className="flex items-center gap-3 mb-10 px-2 mt-4 animate-float">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.5)]">
           <Plane className="text-white w-6 h-6" />
@@ -89,5 +91,14 @@ export default function Navbar() {
         </div>
       </div>
     </nav>
-  );
+    <nav aria-label="Navegación móvil" className="md:hidden fixed bottom-0 inset-x-0 z-50 flex gap-1 overflow-x-auto border-t border-white/10 bg-[#151925]/95 p-2 backdrop-blur-xl">
+      {links.map((link) => {
+        const Icon = link.icon;
+        const active = pathname === link.href;
+        return <Link key={link.href} href={link.href} className={`min-w-[84px] flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-[10px] ${active ? "bg-blue-500/20 text-blue-200" : "text-gray-400"}`}>
+          <Icon className="w-5 h-5" /><span className="whitespace-nowrap">{link.label}</span>
+        </Link>;
+      })}
+    </nav>
+  </>;
 }

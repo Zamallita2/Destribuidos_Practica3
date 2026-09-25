@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
 	"airres-api/db"
 	"airres-api/models"
+	"airres-api/services"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -13,9 +15,13 @@ import (
 // reconcilePostgresReplicas fills missing records after startup or a node
 // restart. Live updates are delivered through the durable outbox with clocks.
 func reconcilePostgresReplicas() {
+	if services.InputImportActive.Load() {
+		return
+	}
 	if !db.IsAvailable(db.PGAmerica) || !db.IsAvailable(db.PGEuropaAsia) {
 		return
 	}
+	var copiedFlights, copiedTickets int64
 	for _, pair := range []struct {
 		source, target *gorm.DB
 		american       bool
@@ -25,6 +31,9 @@ func reconcilePostgresReplicas() {
 	} {
 		var lastFlight uint
 		for {
+			if services.InputImportActive.Load() {
+				return
+			}
 			var flights []models.Vuelo
 			query := pair.source.Where("id > ?", lastFlight)
 			if pair.american {
@@ -39,14 +48,19 @@ func reconcilePostgresReplicas() {
 			if len(flights) == 0 {
 				break
 			}
-			if err := pair.target.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&flights, 200).Error; err != nil {
+			result := pair.target.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&flights, 200)
+			if err := result.Error; err != nil {
 				log.Printf("[PG Replica] flights write failed: %v", err)
 				break
 			}
+			copiedFlights += result.RowsAffected
 			lastFlight = flights[len(flights)-1].ID
 		}
 		var lastTicket uint
 		for {
+			if services.InputImportActive.Load() {
+				return
+			}
 			var tickets []models.Boleto
 			query := pair.source.Where("id_boleto > ?", lastTicket)
 			if pair.american {
@@ -61,14 +75,19 @@ func reconcilePostgresReplicas() {
 			if len(tickets) == 0 {
 				break
 			}
-			if err := pair.target.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&tickets, 200).Error; err != nil {
+			result := pair.target.Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(&tickets, 200)
+			if err := result.Error; err != nil {
 				log.Printf("[PG Replica] tickets write failed: %v", err)
 				break
 			}
+			copiedTickets += result.RowsAffected
 			lastTicket = tickets[len(tickets)-1].IDBoleto
 		}
 		var lastManifest uint
 		for {
+			if services.InputImportActive.Load() {
+				return
+			}
 			var manifests []models.OcupacionVuelo
 			query := pair.source.Where("id_vuelo > ?", lastManifest)
 			if pair.american {
@@ -89,6 +108,9 @@ func reconcilePostgresReplicas() {
 			}
 			lastManifest = manifests[len(manifests)-1].IDVuelo
 		}
+	}
+	if copiedFlights > 0 || copiedTickets > 0 {
+		recordSyncEvent("reconciled", fmt.Sprintf("Reconciliación PG: %d vuelos y %d boletos copiados", copiedFlights, copiedTickets))
 	}
 }
 

@@ -40,6 +40,8 @@
     "ticketManagement": "Gestión de Boletos",
     "routes": "Sugerencias",
     "tsp": "Agente Viajero",
+    "inputs": "Datos de entrada",
+    "sync": "Sincronización",
     "settings": "Ajustes"
   }
 }

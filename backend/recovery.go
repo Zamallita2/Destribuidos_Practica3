@@ -25,6 +25,7 @@ func startRecoveryMonitor() {
 		amNow, euNow, mongoNow := db.IsAvailable(db.PGAmerica), db.IsAvailable(db.PGEuropaAsia), db.IsMongoAvailable()
 		if amNow && !amUp {
 			log.Println("[Recovery] PostgreSQL America restored")
+			recordSyncEvent("reconciliation", "PG_AM recuperado; iniciando reconciliación")
 			migrateRecoveredNode(db.PGAmerica)
 			seedMatrices(db.PGAmerica)
 			seedPrecios(db.PGAmerica)
@@ -32,6 +33,7 @@ func startRecoveryMonitor() {
 		}
 		if euNow && !euUp {
 			log.Println("[Recovery] PostgreSQL Europa/Asia restored")
+			recordSyncEvent("reconciliation", "PG_EU recuperado; iniciando reconciliación")
 			migrateRecoveredNode(db.PGEuropaAsia)
 			seedMatrices(db.PGEuropaAsia)
 			seedPrecios(db.PGEuropaAsia)
@@ -44,6 +46,7 @@ func startRecoveryMonitor() {
 		}
 		if mongoNow && !mongoUp {
 			log.Println("[Recovery] MongoDB restored")
+			recordSyncEvent("reconciliation", "MongoDB recuperado; reconstruyendo snapshot")
 			seedMongoMatrices()
 			bootstrapMongo(false)
 		}

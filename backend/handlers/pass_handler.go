@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,42 +54,88 @@ func loadPurchasedTicket(c *gin.Context) (*gorm.DB, models.Boleto, bool) {
 }
 
 func verificationURL(ticket models.Boleto) string {
-	base := strings.TrimRight(os.Getenv("PUBLIC_BASE_URL"), "/")
+	base := currentLANBaseURL()
 	if base == "" {
-		base = "http://localhost:8080"
+		base = strings.TrimRight(os.Getenv("PUBLIC_BASE_URL"), "/")
 	}
-	return fmt.Sprintf("%s/api/boletos/%d/validar?token=%s", base, ticket.IDBoleto, url.QueryEscape(passToken(ticket)))
+	if base == "" {
+		base = "http://localhost:3001"
+	}
+	return fmt.Sprintf("%s/verificar/%d?token=%s", base, ticket.IDBoleto, url.QueryEscape(passToken(ticket)))
 }
 
 // In the classroom demo the frontend may be opened from a phone over the
 // local network. Prefer that reachable host over a localhost-only default.
 func verificationURLForRequest(c *gin.Context, ticket models.Boleto) string {
-	return fmt.Sprintf("%s/api/boletos/%d/validar?token=%s", publicBaseURLForRequest(c), ticket.IDBoleto, url.QueryEscape(passToken(ticket)))
+	return fmt.Sprintf("%s/verificar/%d?token=%s", publicBaseURLForRequest(c), ticket.IDBoleto, url.QueryEscape(passToken(ticket)))
+}
+
+func currentLANBaseURL() string {
+	path := os.Getenv("QR_LAN_URL_FILE")
+	if path == "" {
+		return ""
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	info, err := os.Stat(path)
+	if err != nil || time.Since(info.ModTime()) > 45*time.Second {
+		return ""
+	}
+	address, err := url.Parse(strings.TrimSpace(string(content)))
+	if err != nil || (address.Scheme != "http" && address.Scheme != "https") || address.Path != "" || address.RawQuery != "" {
+		return ""
+	}
+	ip := net.ParseIP(address.Hostname())
+	if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || address.Port() == "" {
+		return ""
+	}
+	return address.String()
+}
+
+func localRequestHost(host string) bool {
+	parsed, err := url.Parse("http://" + host)
+	if err != nil {
+		return true
+	}
+	name := strings.ToLower(parsed.Hostname())
+	return name == "localhost" || name == "backend" || name == "host.docker.internal" || name == "127.0.0.1" || name == "::1"
 }
 
 func publicBaseURLForRequest(c *gin.Context) string {
-	base := strings.TrimRight(os.Getenv("PUBLIC_BASE_URL"), "/")
 	forwardedHost := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Host"), ",")[0])
 	host := forwardedHost
 	if host == "" {
 		host = c.Request.Host
 	}
-	if host != "" && !strings.HasPrefix(host, "localhost") && !strings.HasPrefix(host, "127.0.0.1") &&
-		(base == "" || strings.Contains(base, "localhost") || strings.Contains(base, "127.0.0.1")) {
+	if host != "" && !localRequestHost(host) {
 		scheme := "http"
 		if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
 			scheme = "https"
 		}
-		base = scheme + "://" + host
+		return scheme + "://" + host
+	}
+	base := currentLANBaseURL()
+	if base == "" {
+		base = strings.TrimRight(os.Getenv("PUBLIC_BASE_URL"), "/")
 	}
 	if base == "" {
-		base = "http://localhost:8080"
+		base = "http://localhost:3001"
 	}
 	return base
 }
 
 func walletDownloadURLForRequest(c *gin.Context, ticketID uint) string {
-	return fmt.Sprintf("%s/api/boletos/%d/wallet/demo.pkpass", publicBaseURLForRequest(c), ticketID)
+	return fmt.Sprintf("%s/pase/%d/billetera", publicBaseURLForRequest(c), ticketID)
+}
+
+func GetQRNetworkAddress(c *gin.Context) {
+	address := publicBaseURLForRequest(c)
+	parsed, err := url.Parse(address)
+	ready := err == nil && !localRequestHost(parsed.Host)
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, gin.H{"url": address, "ready": ready})
 }
 
 func GetBoardingPass(c *gin.Context) {
@@ -113,6 +160,7 @@ func GetBoardingPass(c *gin.Context) {
 		arrivalZone = time.UTC
 	}
 	qrPath := fmt.Sprintf("/api/boletos/%d/qr.png?token=%s", ticket.IDBoleto, url.QueryEscape(passToken(ticket)))
+	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{
 		"id_boleto": ticket.IDBoleto, "pasajero": ticket.NombrePasajero, "clase": ticket.Clase,
 		"vuelo": flight.ID, "origen": origin.Codigo, "destino": destination.Codigo,

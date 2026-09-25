@@ -40,6 +40,8 @@
     "ticketManagement": "Ticket Management",
     "routes": "Suggestions",
     "tsp": "Traveling Salesperson",
+    "inputs": "Input Data",
+    "sync": "Synchronization",
     "settings": "Settings"
   }
 }

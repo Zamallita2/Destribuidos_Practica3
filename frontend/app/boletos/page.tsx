@@ -5,6 +5,7 @@ import { Search, Info, User, Check, X, CreditCard, Plane, MapPin, Loader2, Arrow
 import dynamic from "next/dynamic";
 import { formatFlightLocalTime } from "@/lib/flightTime";
 import { PURCHASE_CAPITALS } from "@/data/capitals";
+import QRNetworkInfo from "@/components/QRNetworkInfo";
 
 const PlaneModelViewer = dynamic(() => import("@/components/PlaneModelViewer"), { 
   ssr: false,
@@ -243,25 +244,24 @@ export default function Boletos() {
           <p className="text-xs text-gray-400">El boleto visual se descarga como PDF. Puedes volver a obtenerlo desde Gestión de Boletos.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={() => downloadVisualTicket(purchasedPass.id_boleto)} disabled={pdfDownloading} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{pdfDownloading ? "Descargando PDF..." : "Descargar boleto visual (PDF)"}</button>
-            <a href={`/api/boletos/${purchasedPass.id_boleto}/wallet/demo.pkpass`} className="rounded bg-white px-4 py-2 text-sm font-semibold text-black">Descargar pase para billetera (.pkpass)</a>
+            <a href={`/pase/${purchasedPass.id_boleto}/billetera`} className="rounded bg-white px-4 py-2 text-sm font-semibold text-black">Abrir pase para Passbook</a>
             <a href={`/gestion-boletos?boleto=${purchasedPass.id_boleto}`} className="rounded border border-white/20 px-4 py-2 text-sm font-semibold text-white">Ver en Gestión de Boletos</a>
           </div>
-          <p className="mt-2 text-xs text-gray-400">El .pkpass de demostración se abre con una app compatible; Apple Wallet oficial requiere firma de emisor.</p>
+          <p className="mt-2 text-xs text-gray-400">En iPhone, descarga el ZIP y comparte el .pkpass desde Archivos a Passbook. Apple Wallet oficial requiere firma de emisor.</p>
           {walletCapabilities.apple && <a href={`/api/boletos/${purchasedPass.id_boleto}/wallet/apple.pkpass`} className="mr-4 mt-3 inline-block rounded bg-white px-4 py-2 text-sm font-semibold text-black">Añadir a Apple Wallet</a>}
           {googleWalletURL && <a href={googleWalletURL} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block rounded bg-white px-4 py-2 text-sm font-semibold text-black">Añadir a Google Wallet</a>}
           <button onClick={() => setPurchasedPass(null)} className="mt-3 text-sm text-blue-300 underline">Cerrar</button>
         </div>
-        <div className="flex flex-wrap gap-4">
-          <figure className="text-center text-xs text-gray-300"><img src={purchasedPass.qr_url} width={160} height={160} alt="QR de validación de abordaje" className="mb-2 rounded bg-white p-2" /><figcaption>QR para validar el abordaje</figcaption></figure>
-          <figure className="text-center text-xs text-gray-300"><img src={`/api/boletos/${purchasedPass.id_boleto}/wallet/qr.png`} width={160} height={160} alt="QR para descargar el pase .pkpass" className="mb-2 rounded bg-white p-2" /><figcaption>Escanear para descargar .pkpass</figcaption></figure>
-        </div>
-        <p className="w-full text-xs text-gray-400">Para escanear desde otro celular, abre esta web con la IP local de tu computadora en lugar de localhost. Ambos dispositivos deben estar en la misma red.</p>
+        <figure className="text-center text-xs text-gray-300"><img src={`/api/boletos/${purchasedPass.id_boleto}/wallet/qr.png`} width={160} height={160} alt="QR para abrir la guía de descarga del pase" className="mx-auto mb-2 rounded bg-white p-2" /><figcaption>Escanea con la cámara del celular para abrir el pase</figcaption></figure>
+        <p className="w-full text-xs text-gray-400">El QR abre una página con la descarga y los pasos para importar el pase en Passbook. Usa la cámara del celular, no el lector de códigos de la app. Ambos dispositivos deben estar en la misma red.</p>
+        <QRNetworkInfo />
       </section>}
       <div className="mb-10 text-center">
         <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 flex items-center justify-center gap-3">
           <Ticket className="text-blue-500 w-10 h-10" /> Venta de Boletos
         </h2>
         <p className="text-gray-400 mt-3 text-lg">Busca tu destino, selecciona tu asiento y vuela con Pabon-go.</p>
+        <a href="/gestion-boletos" className="mt-4 inline-block rounded-lg border border-blue-400/40 px-4 py-2 text-sm font-semibold text-blue-300 hover:bg-blue-500/10">Ya compré un boleto · Ir a Gestión de Boletos</a>
       </div>
 
       {/* SEARCH BAR */}
