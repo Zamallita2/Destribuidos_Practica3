@@ -15,6 +15,7 @@ type NodeStatus = {
 type SyncEvent = { id: number; at: string; type: string; message: string };
 type SyncStatus = {
   observed_at: string;
+  api_node: string;
   nodes: Record<"pg_am" | "pg_eu" | "mongo", NodeStatus>;
   events: SyncEvent[];
   read_source: string;
@@ -82,6 +83,7 @@ export default function SincronizacionPage() {
     <div className={`rounded-xl border p-5 ${!status || error ? "border-white/10 bg-white/5" : allUp ? "border-green-500/30 bg-green-500/10" : "border-amber-500/30 bg-amber-500/10"}`}>
       <p className="text-lg font-semibold">{error ? "Sin observación actual" : !status ? "Consultando servidores…" : allUp ? "Los tres servidores responden" : "Funcionamiento con un nodo no disponible"}</p>
       <p className="mt-1 text-sm text-gray-300">País seleccionado: <strong>{selection.name}</strong>. Fuente para consultar listas: <strong>{sourceLabel}</strong>.</p>
+      {status?.api_node && <p className="mt-1 text-sm text-gray-300">Esta web responde desde: <strong>{status.api_node}</strong>.</p>}
       <p className="mt-2 text-xs text-gray-400">{source === "mongo_snapshot" ? "El PostgreSQL principal no responde; MongoDB ofrece una copia global de lectura. Las reservas requieren PostgreSQL." : "La ruta cambia a MongoDB si el PostgreSQL principal deja de responder. Las reservas se guardan según el vuelo y su réplica."} El país elige la fuente de la lista; no filtra los vuelos por origen.</p>
     </div>
 

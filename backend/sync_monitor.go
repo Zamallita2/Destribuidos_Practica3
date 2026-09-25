@@ -8,6 +8,7 @@ import (
 
 	"airres-api/db"
 	"airres-api/models"
+	"airres-api/services"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"gorm.io/gorm"
@@ -33,6 +34,7 @@ type SyncEventRecord struct {
 
 type SyncSnapshot struct {
 	ObservedAt time.Time           `json:"observed_at"`
+	APINode    string              `json:"api_node"`
 	Nodes      map[string]SyncNode `json:"nodes"`
 	Events     []SyncEventRecord   `json:"events"`
 	ReadSource string              `json:"read_source"`
@@ -163,7 +165,7 @@ func observeSync() {
 		recordSyncEvent("caught_up", "La cola de operaciones pendientes llegó a cero")
 	}
 	syncMonitor.Lock()
-	syncMonitor.snapshot = SyncSnapshot{ObservedAt: time.Now().UTC(), Nodes: nodes, ReadSource: source, Pending: pending, Drift: drift}
+	syncMonitor.snapshot = SyncSnapshot{ObservedAt: time.Now().UTC(), APINode: services.NodeID, Nodes: nodes, ReadSource: source, Pending: pending, Drift: drift}
 	syncMonitor.Unlock()
 }
 
