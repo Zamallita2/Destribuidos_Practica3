@@ -70,48 +70,29 @@ func ListAsientos(c *gin.Context) {
 
 	response := []SeatResponse{}
 
-	if region == "Asia" {
-		// For MongoDB: seats have no int 'id', so we build an id_asiento -> boleto lookup
-		// using the boleto's id_asiento (which IS a Postgres-derived int).
-		// We can't join by seat ID, so: trust the seat's 'estado' from Mongo directly.
-		// For passenger info, build a lookup by numeric id_asiento.
-		boletoByAsientoID := make(map[uint]models.Boleto)
-		for _, b := range boletos {
-			boletoByAsientoID[b.IDAsiento] = b
+	// Build boleto lookup map for this specific flight
+	boletoByAsientoID := make(map[uint]models.Boleto)
+	for _, b := range boletos {
+		boletoByAsientoID[b.IDAsiento] = b
+	}
+
+	for _, s := range asientos {
+		sr := SeatResponse{Asiento: s}
+		if b, ok := boletoByAsientoID[s.ID]; ok {
+			sr.Estado = b.Estado
+			sr.NombrePasajero = b.NombrePasajero
+			sr.EmailPasajero = b.EmailPasajero
+			sr.Pasaporte = b.Pasaporte
+		} else {
+			sr.Estado = "AVAILABLE"
 		}
-		for _, s := range asientos {
-			sr := SeatResponse{Asiento: s}
-			// Use the estado already stored in Mongo (synced via codigo+id_avion)
-			if b, ok := boletoByAsientoID[s.ID]; ok {
-				sr.NombrePasajero = b.NombrePasajero
-				sr.EmailPasajero = b.EmailPasajero
-				sr.Pasaporte = b.Pasaporte
-			}
-			response = append(response, sr)
-		}
-	} else {
-		occupancy := make(map[uint]models.Boleto)
-		for _, b := range boletos {
-			occupancy[b.IDAsiento] = b
-		}
-		for _, s := range asientos {
-			sr := SeatResponse{Asiento: s}
-			if b, ok := occupancy[s.ID]; ok {
-				sr.Estado = b.Estado
-				sr.NombrePasajero = b.NombrePasajero
-				sr.EmailPasajero = b.EmailPasajero
-				sr.Pasaporte = b.Pasaporte
-			} else {
-				sr.Estado = "AVAILABLE"
-			}
-			response = append(response, sr)
-		}
+		response = append(response, sr)
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-// ReservarAsiento creates a Boleto and changes the Seat state to RESERVED or SALED
+// ReservarAsiento creates a Boleto and checks availability for the specific flight
 func ReservarAsiento(c *gin.Context) {
 	var payload struct {
 		IDVuelo        uint    `json:"id_vuelo"`
@@ -132,41 +113,39 @@ func ReservarAsiento(c *gin.Context) {
 	tag := c.GetHeader("X-User-Country")
 	dbConn, region := db.GetDBForCountry(tag)
 
-	var asiento models.Asiento
+	// Validate flight status: Cannot buy/reserve if flight state >= BOARDING (2)
+	var vuelo models.Vuelo
 	if region == "Asia" && db.MongoDatabase != nil {
-		coll := db.MongoDatabase.Collection("asientos")
+		coll := db.MongoDatabase.Collection("vuelos")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		coll.FindOne(ctx, bson.M{"id": payload.IDAsiento}).Decode(&asiento)
+		coll.FindOne(ctx, bson.M{"id": payload.IDVuelo}).Decode(&vuelo)
 	} else if dbConn != nil {
-		if err := dbConn.First(&asiento, payload.IDAsiento).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Asiento no encontrado"})
-			return
-		}
+		dbConn.First(&vuelo, payload.IDVuelo)
 	}
 
-	if asiento.ID == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Asiento no encontrado"})
+	if vuelo.IDEstadoVuelo >= 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No se pueden comprar ni reservar boletos para un vuelo que ya está en proceso de abordaje, despegue o finalizado."})
 		return
 	}
 
-	// Simple validación de máquina de estados
-	if asiento.Estado != "AVAILABLE" && asiento.Estado != "RESERVED" {
-		c.JSON(http.StatusConflict, gin.H{"error": "Asiento no disponible"})
-		return
+	// Check if seat is already taken FOR THIS SPECIFIC FLIGHT
+	var existingBoleto models.Boleto
+	if region == "Asia" && db.MongoDatabase != nil {
+		coll := db.MongoDatabase.Collection("boletos")
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		coll.FindOne(ctx, bson.M{
+			"id_vuelo":   payload.IDVuelo,
+			"id_asiento": payload.IDAsiento,
+			"estado":     bson.M{"$ne": "ANNULLED"},
+		}).Decode(&existingBoleto)
+	} else if dbConn != nil {
+		dbConn.Where("id_vuelo = ? AND id_asiento = ? AND estado != ?", payload.IDVuelo, payload.IDAsiento, "ANNULLED").First(&existingBoleto)
 	}
 
-	// Update Asiento State
-	asiento.Estado = payload.EstadoDeseado
-	asiento.LamportClock = services.GlobalLamportClock.Tick()
-	
-	if region == "Asia" && db.MongoDatabase != nil {
-		coll := db.MongoDatabase.Collection("asientos")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		coll.ReplaceOne(ctx, bson.M{"id": asiento.ID}, asiento)
-	} else if dbConn != nil {
-		dbConn.Save(&asiento)
+	if existingBoleto.IDBoleto != 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "El asiento ya está reservado o vendido para este vuelo."})
+		return
 	}
-	go services.SendSyncEvent("UPDATE", "Asiento", &asiento, asiento.LamportClock)
 
 	// Create Boleto
 	nuevoBoleto := models.Boleto{
@@ -223,36 +202,33 @@ func CancelarReserva(c *gin.Context) {
 		return
 	}
 
-	var asiento models.Asiento
+	// Validate flight status for cancellation: Cannot cancel if flight state >= BOARDING (2)
+	var vuelo models.Vuelo
 	if region == "Asia" && db.MongoDatabase != nil {
-		coll := db.MongoDatabase.Collection("asientos")
+		coll := db.MongoDatabase.Collection("vuelos")
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		coll.FindOne(ctx, bson.M{"id": boleto.IDAsiento}).Decode(&asiento)
+		coll.FindOne(ctx, bson.M{"id": boleto.IDVuelo}).Decode(&vuelo)
 	} else if dbConn != nil {
-		if err := dbConn.First(&asiento, boleto.IDAsiento).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Asiento huérfano"})
-			return
-		}
+		dbConn.First(&vuelo, boleto.IDVuelo)
+	}
+
+	if vuelo.IDEstadoVuelo >= 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No se puede cancelar una reserva cuando el vuelo ya está en abordaje, despegue o finalizado."})
+		return
 	}
 
 	// Cambiar Boleto a Anulado
 	boleto.Estado = "ANNULLED"
 	boleto.LamportClock = services.GlobalLamportClock.Tick()
-	
-	asiento.Estado = "AVAILABLE"
-	asiento.LamportClock = services.GlobalLamportClock.Tick()
 
 	if region == "Asia" && db.MongoDatabase != nil {
 		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
 		db.MongoDatabase.Collection("boletos").ReplaceOne(ctx, bson.M{"id_boleto": boleto.IDBoleto}, boleto)
-		db.MongoDatabase.Collection("asientos").ReplaceOne(ctx, bson.M{"id": asiento.ID}, asiento)
 	} else if dbConn != nil {
 		dbConn.Save(&boleto)
-		dbConn.Save(&asiento)
 	}
 
 	go services.SendSyncEvent("UPDATE", "Boleto", &boleto, boleto.LamportClock)
-	go services.SendSyncEvent("UPDATE", "Asiento", &asiento, asiento.LamportClock)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Reserva cancelada. El asiento procesará disponibilidad en los ecosistemas (retraso 15s) debido a política de reembolso."})
 }
@@ -319,6 +295,21 @@ func UpdateEstadoBoleto(c *gin.Context) {
 
 	if boleto.IDBoleto == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Boleto no encontrado"})
+		return
+	}
+
+	// Validate flight status for ticket state change
+	var vuelo models.Vuelo
+	if region == "Asia" && db.MongoDatabase != nil {
+		coll := db.MongoDatabase.Collection("vuelos")
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		coll.FindOne(ctx, bson.M{"id": boleto.IDVuelo}).Decode(&vuelo)
+	} else if dbConn != nil {
+		dbConn.First(&vuelo, boleto.IDVuelo)
+	}
+
+	if vuelo.IDEstadoVuelo >= 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No se puede modificar o anular el boleto porque el vuelo ya está en abordaje, despegue o finalizado."})
 		return
 	}
 

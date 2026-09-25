@@ -18,6 +18,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 )
@@ -269,9 +270,17 @@ func syncPGSeatsToMongo() {
 
 	coll := db.MongoDatabase.Collection("asientos")
 	ctx := context.Background()
+
+	// Check if already synced
+	count, _ := coll.CountDocuments(ctx, bson.M{})
+	if count >= int64(len(seats)) {
+		log.Println("[Seed Mongo] Asientos already synced in Mongo, skipping bulk sync.")
+		return
+	}
+
+	log.Printf("[Seed Mongo] Syncing %d seats from PG to Mongo with bulk upsert...", len(seats))
 	
-	log.Printf("[Seed Mongo] Syncing %d seats from PG to Mongo with correct IDs...", len(seats))
-	
+	var models []mongo.WriteModel
 	for _, seat := range seats {
 		filter := bson.M{"codigo": seat.Codigo, "id_avion": seat.IDAvion}
 		update := bson.M{"$set": bson.M{
@@ -281,11 +290,16 @@ func syncPGSeatsToMongo() {
 			"estado":   seat.Estado,
 			"clase":    seat.Clase,
 		}}
-		opts := options.Update().SetUpsert(true)
-		_, err := coll.UpdateOne(ctx, filter, update, opts)
+		model := mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true)
+		models = append(models, model)
+	}
+
+	if len(models) > 0 {
+		_, err := coll.BulkWrite(ctx, models)
 		if err != nil {
-			log.Printf("[Seed Mongo] Error syncing seat %s: %v", seat.Codigo, err)
+			log.Printf("[Seed Mongo] Error in bulk sync: %v", err)
+		} else {
+			log.Printf("[Seed Mongo] Successfully bulk synced %d seats to MongoDB.", len(models))
 		}
 	}
-	log.Printf("[Seed Mongo] Successfully synced seats to MongoDB.")
 }

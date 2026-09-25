@@ -67,16 +67,28 @@ export default function Boletos() {
     fetchData();
   }, []);
 
+  const [originSearch, setOriginSearch] = useState("");
+  const [destinationSearch, setDestinationSearch] = useState("");
+
   const handleSearch = () => {
     if (!selectedOrigin || !selectedDestination) return;
     const filtered = vuelos.filter((v: any) => 
       v.id_origen === parseInt(selectedOrigin) && 
-      v.id_destino === parseInt(selectedDestination)
+      v.id_destino === parseInt(selectedDestination) &&
+      (v.id_estado_vuelo === 1 || v.estado_vuelo === "SCHEDULED" || v.id_estado === 1)
     );
     setFilteredVuelos(filtered);
     setSelectedVuelo(null);
     setAsientos([]);
   };
+
+  const filteredOriginCiudades = ciudades.filter((c: any) =>
+    `${c.pais} ${c.codigo} ${c.ciudad || ''}`.toLowerCase().includes(originSearch.toLowerCase())
+  );
+
+  const filteredDestinationCiudades = ciudades.filter((c: any) =>
+    `${c.pais} ${c.codigo} ${c.ciudad || ''}`.toLowerCase().includes(destinationSearch.toLowerCase())
+  );
 
   const loadSeats = async (vuelo: any) => {
     setSelectedVuelo(vuelo);
@@ -117,6 +129,11 @@ export default function Boletos() {
   };
 
   const procesarBoleto = async (nuevoEstado: string) => {
+    if (selectedVuelo && selectedVuelo.id_estado_vuelo >= 2) {
+      alert("⚠️ No se puede reservar ni comprar boletos para un vuelo que está en abordaje (Boarding) o posterior.");
+      return;
+    }
+
     if (!passenger.nombre || !passenger.email || !passenger.pasaporte) {
       alert("⚠️ Por favor completa todos los datos del pasajero antes de continuar.");
       return;
@@ -127,7 +144,7 @@ export default function Boletos() {
       const cost = getPrice(selectedVuelo, selectedSeat.clase);
       const travelTime = Math.round((selectedVuelo.llegada_programada - selectedVuelo.salida_programada) / 3600);
       
-      await fetch(`http://localhost:8080/api/reservas`, {
+      const res = await fetch(`http://localhost:8080/api/reservas`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -145,9 +162,15 @@ export default function Boletos() {
           costo: cost
         })
       });
-      // Refresh seats
-      await loadSeats(selectedVuelo);
-      setSelectedSeat(null);
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        alert(`⚠️ ${errData.error || "Error al procesar la reserva/compra"}`);
+      } else {
+        // Refresh seats
+        await loadSeats(selectedVuelo);
+        setSelectedSeat(null);
+      }
     } catch(e) {
       console.error(e);
     } finally {
@@ -172,31 +195,55 @@ export default function Boletos() {
       <div className="glass-panel p-6 mb-10 flex flex-wrap items-end gap-6 justify-center shadow-2xl border-white/5">
         <div className="flex-1 min-w-[250px]">
           <label className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 block">Origen</label>
-          <div className="relative">
-            <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-            <select 
-              value={selectedOrigin} 
-              onChange={(e) => setSelectedOrigin(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-blue-500 transition appearance-none"
-            >
-              <option value="" className="text-black">Seleccione Ciudad...</option>
-              {ciudades.map((c: any) => <option key={c.id} value={c.id} className="text-black">{c.pais} - {c.codigo}</option>)}
-            </select>
+          <div className="relative space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Filtrar ciudad/país..."
+                value={originSearch}
+                onChange={(e) => setOriginSearch(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-xs text-white placeholder:text-gray-500 outline-none focus:border-blue-500"
+              />
+            </div>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+              <select 
+                value={selectedOrigin} 
+                onChange={(e) => setSelectedOrigin(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-blue-500 transition appearance-none"
+              >
+                <option value="" className="text-black">Seleccione Ciudad ({filteredOriginCiudades.length})...</option>
+                {filteredOriginCiudades.map((c: any) => <option key={c.id} value={c.id} className="text-black">{c.pais} - {c.codigo}</option>)}
+              </select>
+            </div>
           </div>
         </div>
         <ArrowRight className="mb-3 text-gray-600 hidden md:block" />
         <div className="flex-1 min-w-[250px]">
           <label className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-2 block">Destino</label>
-          <div className="relative">
-            <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
-            <select 
-              value={selectedDestination} 
-              onChange={(e) => setSelectedDestination(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-purple-500 transition appearance-none"
-            >
-              <option value="" className="text-black">Seleccione Ciudad...</option>
-              {ciudades.map((c: any) => <option key={c.id} value={c.id} className="text-black">{c.pais} - {c.codigo}</option>)}
-            </select>
+          <div className="relative space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Filtrar ciudad/país..."
+                value={destinationSearch}
+                onChange={(e) => setDestinationSearch(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-1.5 pl-9 pr-3 text-xs text-white placeholder:text-gray-500 outline-none focus:border-purple-500"
+              />
+            </div>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-500" />
+              <select 
+                value={selectedDestination} 
+                onChange={(e) => setSelectedDestination(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-purple-500 transition appearance-none"
+              >
+                <option value="" className="text-black">Seleccione Ciudad ({filteredDestinationCiudades.length})...</option>
+                {filteredDestinationCiudades.map((c: any) => <option key={c.id} value={c.id} className="text-black">{c.pais} - {c.codigo}</option>)}
+              </select>
+            </div>
           </div>
         </div>
         <button 
@@ -275,7 +322,7 @@ export default function Boletos() {
                     <div className="grid grid-cols-4 gap-x-3 gap-y-4 mb-10">
                       {asientos.filter((s:any) => s.clase === 'VIP').map((seat:any) => (
                         <button 
-                          key={seat.id}
+                          key={`${selectedVuelo?.id}-${seat.id}-${seat.codigo}`}
                           onClick={() => {
                             setSelectedSeat(seat);
                             if (seat.estado !== 'AVAILABLE') {
@@ -301,7 +348,7 @@ export default function Boletos() {
                       {asientos.filter((s:any) => s.clase === 'REGULAR').map((seat:any, idx) => {
                         const seatElement = (
                           <button 
-                            key={seat.id}
+                            key={`${selectedVuelo?.id}-${seat.id}-${seat.codigo}`}
                             onClick={() => {
                               setSelectedSeat(seat);
                               if (seat.estado !== 'AVAILABLE') {
