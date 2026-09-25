@@ -1,12 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Ticket, Info, Loader2, ArrowRight, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Ticket, Info, Loader2, ArrowRight, X, Search } from "lucide-react";
+import { formatFlightLocalTime } from "@/lib/flightTime";
+
+const flightStates: Record<number, string> = {
+  1: "Programado", 2: "Embarcando", 3: "Despegó",
+  4: "En vuelo", 5: "Aterrizó", 6: "Llegó", 7: "Cancelado", 8: "Retrasado",
+};
 
 export default function Vuelos() {
-  const [vuelos, setVuelos] = useState([]);
-  const [ciudades, setCiudades] = useState([]);
-  const [aviones, setAviones] = useState([]);
+  const [vuelos, setVuelos] = useState<any[]>([]);
+  const [totalVuelos, setTotalVuelos] = useState(0);
+  const [catalogCounts, setCatalogCounts] = useState({ imported: 0, demo: 0 });
+  const [scope, setScope] = useState<"all" | "upcoming">("all");
+  const [flightIDInput, setFlightIDInput] = useState("");
+  const [flightIDFilter, setFlightIDFilter] = useState("");
+  const [originFilter, setOriginFilter] = useState("");
+  const [destinationFilter, setDestinationFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [pageJump, setPageJump] = useState("");
+  const [listError, setListError] = useState<string | null>(null);
+  const requestID = useRef(0);
+  const [ciudades, setCiudades] = useState<any[]>([]);
+  const [aviones, setAviones] = useState<any[]>([]);
   const [matrix, setMatrix] = useState<any>(null);
   const [precios, setPrecios] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -22,6 +40,9 @@ export default function Vuelos() {
   }, []);
 
   const fetchVuelos = async () => {
+    const thisRequest = ++requestID.current;
+    setLoading(true);
+    setListError(null);
     try {
       const countryData = JSON.parse(localStorage.getItem("airres-country") || "{}");
       const countryHeaders = {
@@ -29,41 +50,50 @@ export default function Vuelos() {
         "X-Region": countryData.region || "America"
       };
       
-      const res = await fetch("http://localhost:8080/api/vuelos", { headers: countryHeaders });
-      if (res.ok) setVuelos(await res.json());
-
-      const resCiudades = await fetch("http://localhost:8080/api/ciudades", { headers: countryHeaders });
+      const params = new URLSearchParams({
+        view: "page", scope, limit: String(itemsPerPage),
+        offset: String((currentPage - 1) * itemsPerPage),
+      });
+      if (flightIDFilter) params.set("id", flightIDFilter);
+      if (originFilter) params.set("origin", originFilter);
+      if (destinationFilter) params.set("destination", destinationFilter);
+      const [res, resCiudades, resAviones, resMatrix, resPrecios] = await Promise.all([
+        fetch(`/api/vuelos?${params}`, { headers: countryHeaders }),
+        fetch("/api/ciudades", { headers: countryHeaders }),
+        fetch("/api/aviones", { headers: countryHeaders }),
+        fetch("/api/tiempos", { headers: countryHeaders }),
+        fetch("/api/precios", { headers: countryHeaders }),
+      ]);
+      if (!res.ok) throw new Error("No se pudo consultar el catálogo de vuelos.");
+      const page = await res.json();
+      if (thisRequest !== requestID.current) return;
+      setVuelos(page.items || []);
+      setTotalVuelos(page.total || 0);
+      setCatalogCounts(page.catalog || { imported: 0, demo: 0 });
       if (resCiudades.ok) setCiudades(await resCiudades.json());
-
-      const resAviones = await fetch("http://localhost:8080/api/aviones", { headers: countryHeaders });
       if (resAviones.ok) setAviones(await resAviones.json());
-
-      const resMatrix = await fetch("http://localhost:8080/api/tiempos", { headers: countryHeaders });
       if (resMatrix.ok) setMatrix(await resMatrix.json());
-
-      const resPrecios = await fetch("http://localhost:8080/api/precios", { headers: countryHeaders });
       if (resPrecios.ok) setPrecios(await resPrecios.json());
-      
-    } catch(e) {
-      console.error(e);
+    } catch (e) {
+      if (thisRequest === requestID.current) setListError(e instanceof Error ? e.message : "No se pudo cargar la lista.");
     } finally {
-      setLoading(false);
+      if (thisRequest === requestID.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     fetchVuelos();
-  }, []);
+  }, [scope, currentPage, itemsPerPage, flightIDFilter, originFilter, destinationFilter]);
 
   // Utility to convert epoch to readable string
-  const toDate = (epoch: number) => {
+  const toDate = (epoch: number, cityID: number) => {
     if(!epoch) return "N/A";
-    const d = new Date(epoch * 1000);
-    return d.toLocaleString("es-ES", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
+    const city = ciudades.find((c: any) => c.id === cityID);
+    return formatFlightLocalTime(epoch, city?.time_zone || "UTC");
   }
 
   const changeState = async (id: number, nextStateId: number) => {
-     await fetch(`http://localhost:8080/api/vuelos/${id}/estado?id_estado=${nextStateId}`, { 
+     await fetch(`/api/vuelos/${id}/estado?id_estado=${nextStateId}`, {
        method: "PUT",
        headers: {
         "X-User-Country": JSON.parse(localStorage.getItem("airres-country") || "{}").name || "Estados Unidos",
@@ -82,8 +112,9 @@ export default function Vuelos() {
        const dstCity: any = ciudades.find((c: any) => c.id === parseInt(dst));
        
        if (orgCity && dstCity) {
-          const price = precios.matriz_precios_regular?.[orgCity.codigo]?.[dstCity.codigo];
-          if (org === dst || price === null || price === undefined) {
+           const economy = precios.matriz_precios_regular?.[orgCity.codigo]?.[dstCity.codigo];
+           const first = precios.matriz_precios_vip?.[orgCity.codigo]?.[dstCity.codigo];
+           if (org === dst || !((economy != null && economy > 0) || (first != null && first > 0))) {
              setErrorVuelo("🚫 Esta ruta no está permitida. Por favor selecciona un destino habilitado.");
              (document.getElementById("dst") as HTMLSelectElement).value = "";
              return false;
@@ -93,15 +124,13 @@ export default function Vuelos() {
     return true;
   };
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [creationMode, setCreationMode] = useState<"direct" | "advanced">("direct");
   const [stopoverRoute, setStopoverRoute] = useState<number[]>([]);
 
   // Pagination calculations
-  const totalPages = Math.ceil(vuelos.length / itemsPerPage) || 1;
+  const totalPages = Math.ceil(totalVuelos / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedVuelos = vuelos.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedVuelos = vuelos;
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -121,7 +150,9 @@ export default function Vuelos() {
     return ciudades.filter((c: any) => {
       if (c.id === currentCityId) return false;
       const val = destCodes[c.codigo];
-      return val !== null && val !== undefined && val > 0;
+      const economy = precios?.matriz_precios_regular?.[originCode]?.[c.codigo];
+      const first = precios?.matriz_precios_vip?.[originCode]?.[c.codigo];
+      return val > 0 && ((economy != null && economy > 0) || (first != null && first > 0));
     });
   };
 
@@ -141,11 +172,11 @@ export default function Vuelos() {
         <div>
           <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 flex items-center gap-3">
             <Ticket className="w-8 h-8 text-blue-500" />
-            Gestión de Vuelos
+            Catálogo de vuelos
           </h2>
-          <p className="text-gray-400 mt-2">Control total sobre cronograma, embarque y despegue.</p>
+          <p className="text-gray-400 mt-2">Consulta los vuelos importados del CSV y los vuelos de demostración. Los registros históricos también aparecen aquí.</p>
         </div>
-        <button onClick={() => { fetchVuelos(); setShowAddModal(true); setErrorVuelo(null); setStopoverRoute([]); setCreationMode("direct"); }} className="btn-primary flex justify-center gap-2 items-center">
+        <button onClick={() => { fetchVuelos(); setShowAddModal(true); setErrorVuelo(null); setStopoverRoute([]); setCreationMode("direct"); }} className="btn-primary flex shrink-0 items-center justify-center gap-2 whitespace-nowrap">
             Nuevo Vuelo
         </button>
       </div>
@@ -353,7 +384,7 @@ export default function Vuelos() {
                            const arrivalEpoch = epoch + (travelTimeHours * 3600);
                            const gateId = 1;
 
-                           const res = await fetch("http://localhost:8080/api/vuelos", {
+                           const res = await fetch("/api/vuelos", {
                               method: "POST",
                               headers: {
                                 "Content-Type": "application/json",
@@ -406,7 +437,7 @@ export default function Vuelos() {
 
                               const arrivalEpoch = currentEpoch + (travelHours * 3600);
 
-                              const res = await fetch("http://localhost:8080/api/vuelos", {
+                              const res = await fetch("/api/vuelos", {
                                  method: "POST",
                                  headers,
                                  body: JSON.stringify({
@@ -455,6 +486,7 @@ export default function Vuelos() {
                             <Info className="text-blue-400 w-8 h-8" /> Detalle del Vuelo
                         </h3>
                         <p className="text-gray-500 font-mono mt-1">ID: VUELO-{selectedVuelo.id}</p>
+                        <a href={`/dashboard/vuelos/${selectedVuelo.id}`} className="text-blue-400 underline">Ver panel del vuelo</a>
                     </div>
                     <button onClick={() => setSelectedVuelo(null)} className="p-2 hover:bg-white/10 rounded-full transition text-gray-400">
                         <X className="w-6 h-6" />
@@ -493,15 +525,15 @@ export default function Vuelos() {
 
                     <div className="space-y-6">
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                            <p className="text-[10px] uppercase text-emerald-400 font-bold tracking-widest mb-4">Cronograma (Región {currentRegion})</p>
+                            <p className="text-[10px] uppercase text-emerald-400 font-bold tracking-widest mb-4">Horario local de cada aeropuerto</p>
                             <div className="space-y-3">
                                 <div>
                                     <p className="text-xs text-gray-500">Salida Programada</p>
-                                    <p className="text-white font-semibold">{toDate(selectedVuelo.salida_programada)}</p>
+                                    <p className="text-white font-semibold">{toDate(selectedVuelo.salida_programada, selectedVuelo.id_origen)}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-500">Llegada Estimada</p>
-                                    <p className="text-white font-semibold">{toDate(selectedVuelo.llegada_programada)}</p>
+                                    <p className="text-white font-semibold">{toDate(selectedVuelo.llegada_programada, selectedVuelo.id_destino)}</p>
                                 </div>
                             </div>
                         </div>
@@ -529,79 +561,120 @@ export default function Vuelos() {
                 <div className="mt-10 flex justify-end items-center gap-4">
                     <div className="flex-1 flex gap-2">
                          <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${selectedVuelo.id_estado_vuelo === 1 ? 'bg-gray-500/20 text-gray-400' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}>
-                            {selectedVuelo.id_estado_vuelo === 6 ? 'VUELO COMPLETADO' : 'EN PROCESO'}
+                            {flightStates[selectedVuelo.id_estado_vuelo] || 'Sin estado'}
                          </span>
                     </div>
                     <button onClick={() => setSelectedVuelo(null)} className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold transition">
                         Cerrar
                     </button>
-                    <button 
-                        onClick={() => {
-                            if (selectedVuelo.id_estado_vuelo < 6) changeState(selectedVuelo.id, selectedVuelo.id_estado_vuelo + 1);
-                            setSelectedVuelo(null);
-                        }} 
-                        className="px-8 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold shadow-lg shadow-blue-500/30 transition"
-                    >
-                        Siguiente Fase
-                    </button>
+                    {selectedVuelo.id_estado_vuelo < 6 && (
+                      <button
+                        onClick={() => { changeState(selectedVuelo.id, selectedVuelo.id_estado_vuelo + 1); setSelectedVuelo(null); }}
+                        className="px-5 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold transition"
+                      >
+                        Cambiar estado a «{flightStates[selectedVuelo.id_estado_vuelo + 1]}»
+                      </button>
+                    )}
                 </div>
              </div>
           </div>
         )}
 
+        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-5">
+            <p className="text-sm text-blue-200">{flightIDFilter || originFilter || destinationFilter ? "Vuelos que coinciden" : scope === "all" ? "Vuelos registrados" : "Vuelos próximos"}</p>
+            <p className="mt-1 text-3xl font-bold text-white">{totalVuelos.toLocaleString("es-BO")}</p>
+            <p className="mt-2 text-xs text-gray-300">{flightIDFilter || originFilter || destinationFilter ? "Resultado de los filtros actuales." : scope === "all" ? "CSV histórico y vuelos de demostración." : "Solo salidas futuras; los históricos están en Todos."}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+            <p className="text-sm text-gray-300">Importados del CSV</p>
+            <p className="mt-1 text-3xl font-bold text-white">{catalogCounts.imported.toLocaleString("es-BO")}</p>
+            <p className="mt-2 text-xs text-gray-400">Registros válidos conservados, incluso históricos.</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+            <p className="text-sm text-gray-300">Vuelos de demostración</p>
+            <p className="mt-1 text-3xl font-bold text-white">{catalogCounts.demo.toLocaleString("es-BO")}</p>
+            <p className="mt-2 text-xs text-gray-400">Programados para poder probar compras.</p>
+          </div>
+        </div>
+        <p className="mb-5 text-sm text-gray-400">Las horas de salida y llegada se muestran en la zona local de cada aeropuerto. Usa los filtros o «Ir a página» para explorar todo el catálogo.</p>
+
+        <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Tipo de vuelos">
+          <button type="button" onClick={() => { setScope("all"); setCurrentPage(1); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${scope === "all" ? "bg-blue-600 text-white" : "bg-white/5 text-gray-300 hover:bg-white/10"}`}>Todos los vuelos</button>
+          <button type="button" onClick={() => { setScope("upcoming"); setCurrentPage(1); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${scope === "upcoming" ? "bg-blue-600 text-white" : "bg-white/5 text-gray-300 hover:bg-white/10"}`}>Solo próximos</button>
+        </div>
+
+        <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <form className="flex min-w-0 gap-2" onSubmit={(event) => { event.preventDefault(); setFlightIDFilter(flightIDInput.trim()); setCurrentPage(1); }}>
+            <input type="number" min="1" value={flightIDInput} onChange={(event) => setFlightIDInput(event.target.value)} placeholder="ID del vuelo" aria-label="Buscar por ID de vuelo" className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#171b2b] px-3 py-2 text-sm text-white" />
+            <button type="submit" className="rounded-lg bg-blue-600 px-3 text-white" aria-label="Buscar vuelo"><Search className="h-4 w-4" /></button>
+          </form>
+          <select value={originFilter} onChange={(event) => { setOriginFilter(event.target.value); setCurrentPage(1); }} aria-label="Filtrar por origen" className="rounded-lg border border-white/10 bg-[#171b2b] px-3 py-2 text-sm text-white">
+            <option value="">Todos los orígenes</option>
+            {ciudades.map((city: any) => <option key={city.id} value={city.id}>{city.codigo} · {city.pais}</option>)}
+          </select>
+          <select value={destinationFilter} onChange={(event) => { setDestinationFilter(event.target.value); setCurrentPage(1); }} aria-label="Filtrar por destino" className="rounded-lg border border-white/10 bg-[#171b2b] px-3 py-2 text-sm text-white">
+            <option value="">Todos los destinos</option>
+            {ciudades.map((city: any) => <option key={city.id} value={city.id}>{city.codigo} · {city.pais}</option>)}
+          </select>
+          <button type="button" onClick={() => { setFlightIDInput(""); setFlightIDFilter(""); setOriginFilter(""); setDestinationFilter(""); setCurrentPage(1); }} className="rounded-lg border border-white/10 px-3 py-2 text-sm text-gray-300 hover:bg-white/10">Limpiar</button>
+        </div>
+
+        {listError && <div role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{listError} <button onClick={fetchVuelos} className="ml-2 underline">Reintentar</button></div>}
         <div className="w-full rounded-xl border border-white/10 overflow-hidden">
           {loading ? (
              <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
-          ) : vuelos.length === 0 ? (
+          ) : totalVuelos === 0 ? (
              <div className="p-10 text-center text-gray-500">
-               No hay vuelos registrados en la base de datos de esta región ({currentRegion}). 
-               Asegúrate de estar en la región correcta o crea uno nuevo usando el botón "Nuevo Vuelo".
+               No hay vuelos que coincidan con estos filtros. Prueba «Todos los vuelos» o limpia la búsqueda.
              </div>
           ) : (
             <>
-              <table className="w-full text-sm text-left">
+              <div className="space-y-3 p-3 xl:hidden">
+                {paginatedVuelos.map((v: any) => <article key={v.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div><p className="text-xs text-gray-400">Vuelo AP {v.id}</p><p className="text-lg font-semibold text-white">{ciudades.find((c: any) => c.id === v.id_origen)?.codigo || "?"} → {ciudades.find((c: any) => c.id === v.id_destino)?.codigo || "?"}</p></div>
+                    <span className="rounded-md bg-white/10 px-2 py-1 text-xs text-gray-200">{flightStates[v.id_estado_vuelo] || "Sin estado"}</span>
+                  </div>
+                  <div className="mt-3 space-y-1 text-sm text-gray-300">
+                    <p><span className="text-gray-500">Sale:</span> {toDate(v.salida_programada, v.id_origen)}</p>
+                    <p><span className="text-gray-500">Llega:</span> {toDate(v.llegada_programada, v.id_destino)}</p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-gray-400">
+                    <span>{v.demo ? "Demostración" : "CSV importado"}</span>
+                    <button onClick={() => setSelectedVuelo(v)} className="rounded-lg border border-blue-500/30 px-3 py-1.5 text-blue-300 hover:bg-blue-500/20">Ver detalle</button>
+                  </div>
+                </article>)}
+              </div>
+              <table className="hidden w-full text-sm text-left xl:table">
                 <thead className="text-xs text-gray-400 uppercase bg-white/5 border-b border-white/10">
                   <tr>
-                    <th className="px-6 py-4">ID Vuelo</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Región DB</th>
-                    <th className="px-6 py-4">Salida Prog.</th>
-                    <th className="px-6 py-4">Llegada Prog.</th>
-                    <th className="px-6 py-4">Detalles</th>
-                    <th className="px-6 py-4">Acción Estado</th>
+                    <th className="px-4 py-4">Vuelo</th>
+                    <th className="px-4 py-4">Ruta</th>
+                    <th className="px-4 py-4">Estado</th>
+                    <th className="px-4 py-4">Salida local</th>
+                    <th className="px-4 py-4">Llegada local</th>
+                    <th className="px-4 py-4">Origen de datos</th>
+                    <th className="px-4 py-4">Detalle</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedVuelos.map((v: any) => (
                     <tr key={v.id} className="border-b border-white/5 outline-none hover:bg-white/5 transition-colors">
-                      <td className="px-6 py-4 font-semibold">VUELO-{v.id}</td>
-                      <td className="px-6 py-4">
-                        {v.id_estado_vuelo === 1 && <span className="px-2 py-1 rounded bg-gray-500/20 text-gray-400 border border-gray-500/30">SCHEDULED</span>}
-                        {v.id_estado_vuelo === 2 && <span className="px-2 py-1 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/50">BOARDING</span>}
-                        {v.id_estado_vuelo === 3 && <span className="px-2 py-1 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">DEPARTED</span>}
-                        {v.id_estado_vuelo === 4 && <span className="px-2 py-1 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">IN_FLIGHT</span>}
-                        {v.id_estado_vuelo === 5 && <span className="px-2 py-1 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">LANDED</span>}
-                        {v.id_estado_vuelo === 6 && <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">ARRIVED</span>}
-                      </td>
-                      <td className="px-6 py-4">
-                         <span className="text-[10px] text-gray-500 font-bold uppercase">{currentRegion}</span>
-                      </td>
-                      <td className="px-6 py-4 opacity-70">{toDate(v.salida_programada)}</td>
-                      <td className="px-6 py-4 opacity-70">{toDate(v.llegada_programada)}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4 font-semibold">AP {v.id}</td>
+                      <td className="px-4 py-4 whitespace-nowrap font-medium">{ciudades.find((c: any) => c.id === v.id_origen)?.codigo || "?"} → {ciudades.find((c: any) => c.id === v.id_destino)?.codigo || "?"}</td>
+                      <td className="px-4 py-4"><span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-gray-200">{flightStates[v.id_estado_vuelo] || "Sin estado"}</span></td>
+                      <td className="px-4 py-4 text-gray-300">{toDate(v.salida_programada, v.id_origen)}</td>
+                      <td className="px-4 py-4 text-gray-300">{toDate(v.llegada_programada, v.id_destino)}</td>
+                      <td className="px-4 py-4 text-gray-400">{v.demo ? "Demostración" : "CSV importado"}</td>
+                      <td className="px-4 py-4">
                          <button 
                            onClick={() => setSelectedVuelo(v)}
-                           className="p-2 hover:bg-blue-500/20 rounded-lg text-blue-400 transition border border-transparent hover:border-blue-500/30"
+                           aria-label={`Ver detalle del vuelo ${v.id}`}
+                           className="rounded-lg border border-blue-500/30 px-3 py-1.5 text-blue-300 transition hover:bg-blue-500/20"
                          >
-                           <Info className="w-5 h-5"/>
+                           Ver detalle
                          </button>
-                      </td>
-                      <td className="px-6 py-4">
-                         {v.id_estado_vuelo < 6 && (
-                           <button onClick={() => changeState(v.id, v.id_estado_vuelo + 1)} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg flex gap-2 items-center transition shadow-[0_0_10px_rgba(59,130,246,0.5)]">
-                             Siguiente Fase <ArrowRight className="w-3 h-3"/>
-                           </button>
-                         )}
                       </td>
                     </tr>
                   ))}
@@ -611,7 +684,7 @@ export default function Vuelos() {
               {/* PAGINATION CONTROLS */}
               <div className="p-4 bg-white/5 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <span>Mostrando {startIndex + 1} - {Math.min(startIndex + itemsPerPage, vuelos.length)} de {vuelos.length} vuelos</span>
+                  <span>Mostrando {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalVuelos)} de {totalVuelos.toLocaleString("es-BO")} vuelos</span>
                   <span className="mx-2">|</span>
                   <span>Filas por página:</span>
                   <select 
@@ -619,9 +692,9 @@ export default function Vuelos() {
                     onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                     className="bg-white/5 border border-white/10 rounded px-2 py-1 text-white outline-none"
                   >
-                    <option value={10} className="text-black">10</option>
-                    <option value={20} className="text-black">20</option>
+                    <option value={25} className="text-black">25</option>
                     <option value={50} className="text-black">50</option>
+                    <option value={100} className="text-black">100</option>
                   </select>
                 </div>
 
@@ -661,6 +734,11 @@ export default function Vuelos() {
                   >
                     Siguiente
                   </button>
+                  <form onSubmit={(event) => { event.preventDefault(); handlePageChange(Number(pageJump)); setPageJump(""); }} className="flex items-center gap-2 text-xs text-gray-300">
+                    <label htmlFor="jump-to-page">Ir a página</label>
+                    <input id="jump-to-page" type="number" min="1" max={totalPages} value={pageJump} onChange={(event) => setPageJump(event.target.value)} className="w-20 rounded border border-white/10 bg-[#171b2b] px-2 py-1.5 text-white" />
+                    <button type="submit" className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20">Ir</button>
+                  </form>
                 </div>
               </div>
             </>

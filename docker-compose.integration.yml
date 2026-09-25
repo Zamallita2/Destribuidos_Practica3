@@ -1,0 +1,83 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        API_PROXY_TARGET: http://backend:8080
+    ports:
+      - "3002:3000"
+    depends_on:
+      - backend
+
+  postgres_am:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: airres_am
+    volumes:
+      - integration_pg_am:/var/lib/postgresql/data
+      - ./init-scripts/init-pg-am.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres_eu:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: airres_eu
+    volumes:
+      - integration_pg_eu:/var/lib/postgresql/data
+      - ./init-scripts/init-pg-eu.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mongodb:
+    image: mongo:7.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: test
+      MONGO_INITDB_DATABASE: airres_sync
+    volumes:
+      - integration_mongo:/data/db
+      - ./init-scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DB_PG1_DSN: "host=postgres_am user=postgres password=test dbname=airres_am port=5432 sslmode=disable"
+      DB_PG2_DSN: "host=postgres_eu user=postgres password=test dbname=airres_eu port=5432 sslmode=disable"
+      DB_MONGO_URI: "mongodb://root:test@mongodb:27017/"
+      DB_MONGO_NAME: airres_sync
+      NODE_ID: integration
+      SEED_DEMO_FLIGHTS: "true"
+      SEED_OCCUPANCY_MAX_FLIGHTS: "5"
+      PERCENTAGE_SOLD: "73"
+      REFUND_DELAY_MINUTES: "0"
+      BOARDING_PASS_SECRET: "integration-pass-signing-secret-123456789"
+      PUBLIC_BASE_URL: "http://localhost:8081"
+    volumes:
+      - ./dataset:/app/dataset:ro
+      - ./reports:/app/reports
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres_am:
+        condition: service_healthy
+      postgres_eu:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+
+volumes:
+  integration_pg_am:
+  integration_pg_eu:
+  integration_mongo:

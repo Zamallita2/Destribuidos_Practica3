@@ -15,6 +15,7 @@ export default function Navbar() {
     { href: "/vuelos", label: t("nav.flights"), icon: Plane },
     { href: "/boletos", label: t("nav.tickets"), icon: Ticket },
     { href: "/sugerencias", label: t("nav.routes"), icon: Map },
+    { href: "/tsp", label: t("nav.tsp"), icon: Map },
     { href: "/configuracion", label: t("nav.settings"), icon: Settings },
   ];
 
@@ -25,7 +26,7 @@ export default function Navbar() {
           <Plane className="text-white w-6 h-6" />
         </div>
         <span className="text-xl font-bold font-heading tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
-          AirRes
+          Pabón
         </span>
       </div>
 
@@ -81,7 +82,7 @@ export default function Navbar() {
              <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" alt="Admin" className="w-full h-full object-cover" />
           </div>
           <div>
-            <p className="text-sm font-semibold">Admin Panel</p>
+            <p className="text-sm font-semibold">Administración</p>
             <p className="text-xs text-gray-500">v1.0.0</p>
           </div>
         </div>

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import { formatFlightLocalTime } from "@/lib/flightTime";
 
 export default function GestionBoletos() {
   const [boletos, setBoletos] = useState<any[]>([]);
@@ -34,9 +35,9 @@ export default function GestionBoletos() {
       };
 
       const [cRes, vRes, bRes] = await Promise.all([
-        fetch("http://localhost:8080/api/ciudades", { headers: countryHeaders }),
-        fetch("http://localhost:8080/api/vuelos", { headers: countryHeaders }),
-        fetch("http://localhost:8080/api/boletos", { headers: countryHeaders }),
+        fetch("/api/ciudades", { headers: countryHeaders }),
+        fetch("/api/vuelos", { headers: countryHeaders }),
+        fetch("/api/boletos", { headers: countryHeaders }),
       ]);
 
       if (cRes.ok) setCiudades(await cRes.json());
@@ -65,7 +66,7 @@ export default function GestionBoletos() {
         "Content-Type": "application/json",
       };
 
-      const res = await fetch(`http://localhost:8080/api/boletos/${boletoId}/estado`, {
+      const res = await fetch(`/api/boletos/${boletoId}/estado`, {
         method: "PATCH",
         headers: countryHeaders,
         body: JSON.stringify({ estado: newState }),
@@ -695,23 +696,44 @@ export default function GestionBoletos() {
 
   const exportarBoletoPDF = async () => {
     if (!selectedBoleto) return;
+    if (selectedBoleto.estado !== "SALED") { alert("Solo los boletos comprados y vigentes tienen pase de abordar."); return; }
 
     setUpdating(true);
     let div: HTMLDivElement | null = null;
     let styleTag: HTMLStyleElement | null = null;
 
     try {
-      const details = getFlightDetails(selectedBoleto.id_vuelo);
-      const orgCod = details?.org?.codigo || "N/A";
-      const dstCod = details?.dst?.codigo || "N/A";
-      const pasajero = selectedBoleto.nombre_pasajero || "N/A";
-      const asnt = selectedBoleto.id_asiento || "N/A";
-      const fl = "C-" + (selectedBoleto.id_vuelo || "8809");
-      const date = "April 04, 2022";
-
-      const qrData = encodeURIComponent(
-        `${selectedBoleto.id_boleto}|${pasajero}|${orgCod}-${dstCod}|${asnt}`
-      );
+      const flightResponse = await fetch(`/api/vuelos/${selectedBoleto.id_vuelo}`);
+      if (!flightResponse.ok) throw new Error("No se encontró el vuelo del boleto");
+      const flight = await flightResponse.json();
+      const ownerRegion = selectedBoleto.id_vuelo >= 1000000000 ? "Europa" : "America";
+      const [seatsResponse, gatesResponse] = await Promise.all([
+        fetch(`/api/vuelos/${selectedBoleto.id_vuelo}/asientos`, { headers: { "X-Region": ownerRegion } }),
+        fetch("/api/puertas"),
+      ]);
+      if (!seatsResponse.ok || !gatesResponse.ok) throw new Error("No se pudieron cargar asiento y puerta");
+      const seats = await seatsResponse.json();
+      const gates = await gatesResponse.json();
+      const origin = ciudades.find((city: any) => city.id === flight.id_origen);
+      const destination = ciudades.find((city: any) => city.id === flight.id_destino);
+      const seat = seats.find((item: any) => item.id === selectedBoleto.id_asiento);
+      const gateRecord = gates.find((item: any) => item.id === flight.id_puerta);
+      if (!origin || !destination || !seat || !gateRecord) throw new Error("Datos incompletos para el boleto");
+      const escapeHtml = (value: unknown) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] || char));
+      const orgCod = escapeHtml(origin.codigo);
+      const dstCod = escapeHtml(destination.codigo);
+      const pasajero = escapeHtml(selectedBoleto.nombre_pasajero);
+      const asnt = escapeHtml(seat.codigo);
+      const gate = escapeHtml(gateRecord.puerta);
+      const travelClass = selectedBoleto.clase === "VIP" ? "FIRST CLASS" : "ECONOMY";
+      const fl = `AP-${flight.id}`;
+      const date = formatFlightLocalTime(flight.salida_programada, origin.time_zone);
+      const arrivalDate = formatFlightLocalTime(flight.llegada_programada, destination.time_zone);
+      const departureTime = date;
+      const passResponse = await fetch(`/api/boletos/${selectedBoleto.id_boleto}/pase`);
+      if (!passResponse.ok) throw new Error("No se pudo generar el pase verificable");
+      const pass = await passResponse.json();
+      const qrSource = `${pass.qr_url}`;
 
       styleTag = document.createElement("style");
       styleTag.id = "pdf-ticket-styles";
@@ -736,15 +758,15 @@ export default function GestionBoletos() {
               <div>
                 <div class="qr-side">
                   <div class="qr">
-                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${qrData}" alt="QR">
+                    <img src="${qrSource}" alt="QR">
                   </div>
                   <div class="scan-v">SCAN BARCODE</div>
                 </div>
                 <div class="grid2">
-                  <div class="f"><label>GATE :</label><div class="v">08</div></div>
-                  <div class="f"><label>DAGE :</label><div class="v">B-04</div></div>
-                  <div class="f"><label>CLASSES :</label><div class="v s">BUSINESS</div></div>
-                  <div class="f"><label>TIME :</label><div class="v">04.25 PM</div></div>
+                  <div class="f"><label>GATE :</label><div class="v">${gate}</div></div>
+                  <div class="f"><label>STATUS :</label><div class="v">${escapeHtml(selectedBoleto.estado)}</div></div>
+                  <div class="f"><label>CLASS :</label><div class="v s">${travelClass}</div></div>
+                  <div class="f"><label>DEPARTURE :</label><div class="v">${departureTime}</div></div>
                 </div>
               </div>
               <div class="fields">
@@ -755,13 +777,13 @@ export default function GestionBoletos() {
                 </div>
                 <div class="row2">
                   <div class="f"><label>PASSENGER NAME :</label><div class="v s">${pasajero}</div></div>
-                  <div class="f"><label>GROUP :</label><div class="groups"><div class="g">01</div><div class="g a">02</div><div class="g">03</div><div class="g">04</div></div></div>
+                  <div class="f"><label>BOOKING :</label><div class="v">#${selectedBoleto.id_boleto}</div></div>
                 </div>
                 <div class="route-wrap">
                   <div class="route">
                     <div class="city"><h3>${orgCod}</h3><p>${date}</p></div>
                     <div class="to">TO</div>
-                    <div class="city"><h3>${dstCod}</h3><p>${date}</p></div>
+                    <div class="city"><h3>${dstCod}</h3><p>${arrivalDate}</p></div>
                   </div>
                 </div>
               </div>
@@ -771,26 +793,26 @@ export default function GestionBoletos() {
 
           <div class="right">
             <div class="st">BOARDING PASS</div>
-            <div class="sc"><div class="ss"></div><div>BUSINESS CLASS</div></div>
+            <div class="sc"><div class="ss"></div><div>${travelClass}</div></div>
             <div class="sl" style="color:#d7e0e5">PASSANGER NAME :</div>
             <div class="sn">${pasajero}</div>
             <div class="mr">
               <div class="mc"><h4>${orgCod}</h4><p>${date}</p></div>
               <div class="mt">TO</div>
-              <div class="mc"><h4>${dstCod}</h4><p>${date}</p></div>
+              <div class="mc"><h4>${dstCod}</h4><p>${arrivalDate}</p></div>
             </div>
             <div class="sg">
               <div class="sf"><div class="sl">FLIGHT :</div><div class="v">${fl}</div></div>
               <div class="sf"><div class="sl">SEAT :</div><div class="v">${asnt}</div></div>
               <div class="sf"><div class="sl">DATE :</div><div class="v">${date}</div></div>
-              <div class="sf"><div class="sl">GATE :</div><div class="v">08</div></div>
-              <div class="sf"><div class="sl">DAGE :</div><div class="v">B-04</div></div>
+              <div class="sf"><div class="sl">GATE :</div><div class="v">${gate}</div></div>
+              <div class="sf"><div class="sl">DEPARTURE :</div><div class="v">${departureTime}</div></div>
             </div>
             <div class="bs"></div>
             <div class="sb">
               <div class="scan-s">Scan Barcode Ticket</div>
               <div class="qr-sm">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${qrData}" alt="QR">
+                <img src="${qrSource}" alt="QR">
               </div>
             </div>
           </div>
@@ -816,7 +838,7 @@ export default function GestionBoletos() {
                   Flight: ${fl}<br>
                   Route: ${orgCod} to ${dstCod}<br>
                   Seat: ${asnt}<br>
-                  Gate: 08
+                  Gate: ${gate}
                 </p>
               </div>
             </div>
@@ -828,10 +850,10 @@ export default function GestionBoletos() {
               <div class="box"><h4>PASSENGER</h4><p>${pasajero}</p></div>
               <div class="box"><h4>IMPORTANT NOTE</h4><p>This boarding pass is non-transferable and valid only for the named passenger.</p></div>
               <div class="sum">
-                <div class="it"><label>CLASS</label><span>Business</span></div>
-                <div class="it"><label>GROUP</label><span>02</span></div>
-                <div class="it"><label>GATE</label><span>08</span></div>
-                <div class="it"><label>DAGE</label><span>B-04</span></div>
+                <div class="it"><label>CLASS</label><span>${travelClass}</span></div>
+                <div class="it"><label>BOOKING</label><span>#${selectedBoleto.id_boleto}</span></div>
+                <div class="it"><label>GATE</label><span>${gate}</span></div>
+                <div class="it"><label>DEPARTURE</label><span>${departureTime}</span></div>
               </div>
             </div>
           </div>
@@ -888,7 +910,7 @@ export default function GestionBoletos() {
         Math.min(reversoHeight, pdfHeight - margin * 2)
       );
 
-      pdf.save(`Boleto_${pasajero.replace(/\s+/g, "_")}.pdf`);
+      pdf.save(`Boleto_${selectedBoleto.id_boleto}.pdf`);
     } catch (err) {
       console.error(err);
       alert("Hubo un error al exportar el PDF");
@@ -1013,11 +1035,16 @@ export default function GestionBoletos() {
         <div className="lg:col-span-1 glass-panel p-6 h-[650px] sticky top-32 overflow-y-auto">
           {selectedBoleto ? (
             <div className="animate-in zoom-in duration-300 fade-in">
-              <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+              <div className="flex flex-wrap justify-between items-center gap-3 mb-6 border-b border-white/10 pb-4">
                 <h3 className="font-bold text-xl uppercase tracking-wider text-white">
                   Detalle del Boleto
                 </h3>
 
+                <div className="flex flex-wrap gap-2">
+                {selectedBoleto.estado === "SALED" && <a
+                  href={`/api/boletos/${selectedBoleto.id_boleto}/wallet/demo.pkpass`}
+                  className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-600/20 px-4 py-2 text-sm font-bold text-emerald-300 hover:bg-emerald-600/30"
+                >Descargar pase .pkpass</a>}
                 <button
                   onClick={exportarBoletoPDF}
                   disabled={updating}
@@ -1030,6 +1057,7 @@ export default function GestionBoletos() {
                   )}
                   Exportar a PDF
                 </button>
+                </div>
               </div>
 
               <div className="space-y-6">

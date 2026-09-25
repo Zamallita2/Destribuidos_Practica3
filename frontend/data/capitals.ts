@@ -1,0 +1,18 @@
+export const PURCHASE_CAPITALS = [
+  ["Bogotá, Colombia", "America/Bogota"], ["La Paz, Bolivia", "America/La_Paz"],
+  ["Lima, Perú", "America/Lima"], ["Quito, Ecuador", "America/Guayaquil"],
+  ["Caracas, Venezuela", "America/Caracas"], ["Santiago, Chile", "America/Santiago"],
+  ["Buenos Aires, Argentina", "America/Argentina/Buenos_Aires"], ["Brasilia, Brasil", "America/Sao_Paulo"],
+  ["Montevideo, Uruguay", "America/Montevideo"], ["Ciudad de México, México", "America/Mexico_City"],
+  ["Washington, Estados Unidos", "America/New_York"], ["Ottawa, Canadá", "America/Toronto"],
+  ["Londres, Reino Unido", "Europe/London"], ["Madrid, España", "Europe/Madrid"],
+  ["París, Francia", "Europe/Paris"], ["Berlín, Alemania", "Europe/Berlin"],
+  ["Roma, Italia", "Europe/Rome"], ["Lisboa, Portugal", "Europe/Lisbon"],
+  ["Ámsterdam, Países Bajos", "Europe/Amsterdam"], ["Ankara, Turquía", "Europe/Istanbul"],
+  ["El Cairo, Egipto", "Africa/Cairo"], ["Nairobi, Kenia", "Africa/Nairobi"],
+  ["Pretoria, Sudáfrica", "Africa/Johannesburg"], ["Abuya, Nigeria", "Africa/Lagos"],
+  ["Abu Dabi, Emiratos Árabes Unidos", "Asia/Dubai"], ["Nueva Delhi, India", "Asia/Kolkata"],
+  ["Pekín, China", "Asia/Shanghai"], ["Tokio, Japón", "Asia/Tokyo"],
+  ["Seúl, Corea del Sur", "Asia/Seoul"], ["Singapur", "Asia/Singapore"],
+  ["Canberra, Australia", "Australia/Sydney"], ["Wellington, Nueva Zelanda", "Pacific/Auckland"],
+] as const;

@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+ARG API_PROXY_TARGET=http://backend:8080
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./

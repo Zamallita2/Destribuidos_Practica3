@@ -88,3 +88,22 @@ func IsVectorDominant(clockA, clockB string) bool {
 
 	return isStrictlyGreater
 }
+
+// ShouldApplyVersion preserves causal order. Concurrent versions use a
+// deterministic Lamport/node ordering; booking conflicts are handled by
+// the single writer and unique seat constraint instead.
+func ShouldApplyVersion(incomingVector, existingVector string, incomingLamport, existingLamport int64,
+	incomingNode, existingNode string) bool {
+	if incomingVector != "" && existingVector != "" {
+		if IsVectorDominant(incomingVector, existingVector) {
+			return true
+		}
+		if IsVectorDominant(existingVector, incomingVector) {
+			return false
+		}
+	}
+	if incomingLamport != existingLamport {
+		return incomingLamport > existingLamport
+	}
+	return incomingNode > existingNode
+}

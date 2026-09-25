@@ -4,10 +4,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://backend:8080
     ports:
       - "3001:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8080/api
     depends_on:
       - backend
     networks:
@@ -27,6 +27,15 @@ services:
       - DB_MONGO_NAME=airres_sync
       - PERCENTAGE_SOLD=73
       - REFUND_DELAY_MINUTES=15
+      - BOARDING_PASS_SECRET=${BOARDING_PASS_SECRET:-demo-only-change-this-before-real-use-2026}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:8080}
+      - APPLE_PASS_TYPE_ID=${APPLE_PASS_TYPE_ID:-}
+      - APPLE_TEAM_ID=${APPLE_TEAM_ID:-}
+      - APPLE_PASS_CERT_PATH=${APPLE_PASS_CERT_PATH:-}
+      - APPLE_PASS_KEY_PATH=${APPLE_PASS_KEY_PATH:-}
+      - APPLE_WWDR_CERT_PATH=${APPLE_WWDR_CERT_PATH:-}
+      - GOOGLE_WALLET_ISSUER_ID=${GOOGLE_WALLET_ISSUER_ID:-}
+      - GOOGLE_WALLET_CREDENTIALS_PATH=${GOOGLE_WALLET_CREDENTIALS_PATH:-}
     depends_on:
       postgres_am:
         condition: service_healthy
@@ -37,6 +46,8 @@ services:
     volumes:
       - ./backend/uploads:/app/uploads
       - ./dataset:/app/dataset:ro
+      - ./reports:/app/reports
+      - ./wallet-secrets:/run/wallet-secrets:ro
     networks:
       - airres_network
 

@@ -70,6 +70,9 @@ func getMatricesFromDB(region string) (map[string]map[string]float64, map[string
 // FindTop3Paths finds the top 3 routes using Yen's K-Shortest Paths algorithm
 func FindTop3Paths(origen, destino, criterio, clase, tag string) []SuggestedRoute {
 	tMatrix, pMatrixReg, pMatrixVip := getMatricesFromDB(tag)
+	if origen == destino || tMatrix[origen] == nil || tMatrix[destino] == nil {
+		return []SuggestedRoute{}
+	}
 
 	// Determine the primary weights (cost) and secondary weights
 	var primaryMatrix map[string]map[string]float64
@@ -84,15 +87,13 @@ func FindTop3Paths(origen, destino, criterio, clase, tag string) []SuggestedRout
 		if u == v {
 			return 0
 		}
-		
-		validCost := primaryMatrix[u][v] > 0
-		
-		// Wait, sometimes matrix might have null -> which unmarshals to 0. 
+
+		validCost := primaryMatrix[u][v] > 0 && tMatrix[u][v] > 0
+
+		// Wait, sometimes matrix might have null -> which unmarshals to 0.
 		// If cost is 0 in a JSON map but nodes are different, it means null (no direct flight).
-		if primaryMatrix != nil && primaryMatrix[u] != nil {
-			if !validCost {
-				return math.Inf(1)
-			}
+		if !validCost {
+			return math.Inf(1)
 		}
 
 		if criterio == "costo" {

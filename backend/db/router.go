@@ -15,20 +15,30 @@ func GetDBForCountry(countryOrRegion string) (*gorm.DB, string) {
 	if region != "America" && region != "Europa" && region != "Asia" {
 		region = config.GetRegionFromCountry(countryOrRegion)
 	}
-	
-	if region == "America" && PGAmerica != nil {
+
+	if region == "America" && IsAvailable(PGAmerica) {
 		log.Printf("[Router] Route request to PG America\n")
 		return PGAmerica, "America"
 	}
 
-	if region == "Europa" && PGEuropaAsia != nil {
+	if region == "Europa" && IsAvailable(PGEuropaAsia) {
 		log.Printf("[Router] Route request to PG Europa\n")
 		return PGEuropaAsia, "Europa"
 	}
 
 	if region == "Asia" {
-		return nil, "Asia"
+		if IsMongoAvailable() {
+			return nil, "Asia"
+		}
+		if IsAvailable(PGEuropaAsia) {
+			return PGEuropaAsia, "Europa"
+		}
 	}
-
-	return PGAmerica, "America"
+	if IsAvailable(PGAmerica) {
+		return PGAmerica, "America"
+	}
+	if IsAvailable(PGEuropaAsia) {
+		return PGEuropaAsia, "Europa"
+	}
+	return nil, region
 }
