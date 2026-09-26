@@ -10,7 +10,7 @@ import (
 )
 
 func migrateRecoveredNode(conn *gorm.DB) {
-	if err := conn.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{}, &models.SyncOutbox{}, &models.OcupacionVuelo{}, &models.MigrationMarker{}, &models.IDAllocator{}); err != nil {
+	if err := conn.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{}, &models.SyncOutbox{}, &models.OcupacionVuelo{}, &models.MigrationMarker{}, &models.IDAllocator{}, &models.Reposicionamiento{}); err != nil {
 		log.Printf("[Recovery] migration failed: %v", err)
 		return
 	}

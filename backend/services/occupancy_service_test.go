@@ -44,3 +44,21 @@ func TestFlightManifestHasRoundedTargetsAndUnicodePassengers(t *testing.T) {
 		t.Fatal("seed must be deterministic")
 	}
 }
+
+func TestOccupancyTargetsUseConfiguredPercentages(t *testing.T) {
+	t.Setenv("PERCENTAGE_SOLD", "50")
+	t.Setenv("PERCENTAGE_RESERVED", "10")
+	if sold, reserved := OccupancyTargets(200); sold != 100 || reserved != 20 {
+		t.Fatalf("got sold=%d reserved=%d", sold, reserved)
+	}
+	t.Setenv("PERCENTAGE_SOLD", "invalid")
+	t.Setenv("PERCENTAGE_RESERVED", "")
+	if sold, reserved := OccupancyTargets(228); sold != 166 || reserved != 7 {
+		t.Fatalf("defaults: got sold=%d reserved=%d", sold, reserved)
+	}
+	t.Setenv("PERCENTAGE_SOLD", "99")
+	t.Setenv("PERCENTAGE_RESERVED", "5")
+	if sold, reserved := OccupancyTargets(228); sold != 166 || reserved != 7 {
+		t.Fatalf("over 100%% must fall back: got sold=%d reserved=%d", sold, reserved)
+	}
+}

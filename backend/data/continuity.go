@@ -17,17 +17,31 @@ type ContinuityIssue struct {
 }
 
 type ContinuityReport struct {
-	Flights     int               `json:"flights"`
-	Transitions int               `json:"transitions"`
-	Jumps       int               `json:"jumps"`
-	Overlaps    int               `json:"overlaps"`
-	Examples    []ContinuityIssue `json:"examples"`
+	Flights     int `json:"flights"`
+	Transitions int `json:"transitions"`
+	Jumps       int `json:"jumps"`
+	Overlaps    int `json:"overlaps"`
+	// Repositionings counts empty positioning flights included in the analysis.
+	Repositionings int               `json:"repositionings"`
+	Examples       []ContinuityIssue `json:"examples"`
 }
 
 // AnalyzeContinuity is diagnostic only. Cancelled flights do not move an
 // aircraft, and the input slice is never changed or filtered.
 func AnalyzeContinuity(flights []models.Vuelo) ContinuityReport {
+	return AnalyzeContinuityWithRepositioning(flights, nil)
+}
+
+// AnalyzeContinuityWithRepositioning also treats empty positioning flights as
+// aircraft movements, so a repositioned aircraft is not reported as a jump.
+func AnalyzeContinuityWithRepositioning(flights []models.Vuelo, ferries []models.Reposicionamiento) ContinuityReport {
 	ordered := append([]models.Vuelo(nil), flights...)
+	for _, ferry := range ferries {
+		ordered = append(ordered, models.Vuelo{
+			ID: ferry.IDVueloSiguiente, IDAvion: ferry.IDAvion, IDOrigen: ferry.IDOrigen, IDDestino: ferry.IDDestino,
+			SalidaProgramada: ferry.SalidaProgramada, LlegadaProgramada: ferry.LlegadaProgramada,
+		})
+	}
 	sort.Slice(ordered, func(i, j int) bool {
 		if ordered[i].IDAvion != ordered[j].IDAvion {
 			return ordered[i].IDAvion < ordered[j].IDAvion
@@ -37,7 +51,7 @@ func AnalyzeContinuity(flights []models.Vuelo) ContinuityReport {
 		}
 		return ordered[i].ID < ordered[j].ID
 	})
-	report := ContinuityReport{Flights: len(flights), Examples: []ContinuityIssue{}}
+	report := ContinuityReport{Flights: len(flights), Repositionings: len(ferries), Examples: []ContinuityIssue{}}
 	var previous models.Vuelo
 	for _, current := range ordered {
 		if current.IDEstadoVuelo == 7 {

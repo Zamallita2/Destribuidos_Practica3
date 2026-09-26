@@ -41,9 +41,28 @@ func seedDemoFlights() {
 	db.PGAmerica.Find(&cities)
 	db.PGAmerica.Find(&gates)
 	cityID := make(map[string]uint)
+	cityCode := make(map[uint]string)
 	gateID := make(map[uint]uint)
 	for _, city := range cities {
 		cityID[city.Codigo] = city.ID
+		cityCode[city.ID] = city.Codigo
+	}
+	// A demo flight departs from where its aircraft last landed, after it lands.
+	type lastPosition struct {
+		IDAvion           uint
+		IDDestino         uint
+		LlegadaProgramada int64
+	}
+	lastByPlane := make(map[uint]lastPosition)
+	for _, conn := range []*gorm.DB{db.PGAmerica, db.PGEuropaAsia} {
+		var rows []lastPosition
+		conn.Raw(`SELECT DISTINCT ON (id_avion) id_avion, id_destino, llegada_programada
+			FROM vuelos WHERE id_estado_vuelo <> 7 ORDER BY id_avion, llegada_programada DESC`).Scan(&rows)
+		for _, row := range rows {
+			if row.LlegadaProgramada > lastByPlane[row.IDAvion].LlegadaProgramada {
+				lastByPlane[row.IDAvion] = row
+			}
+		}
 	}
 	for _, gate := range gates {
 		if gateID[gate.IDCiudad] == 0 {
@@ -54,6 +73,13 @@ func seedDemoFlights() {
 	added := 0
 	for index, plane := range planes {
 		originCode := matrix.Airports[index%len(matrix.Airports)]
+		departure := start.Add(time.Duration(index) * time.Hour).Unix()
+		if last, ok := lastByPlane[plane.ID]; ok && cityCode[last.IDDestino] != "" {
+			originCode = cityCode[last.IDDestino]
+			if earliest := last.LlegadaProgramada + 3600; earliest > departure {
+				departure = earliest
+			}
+		}
 		originID := cityID[originCode]
 		var existing int64
 		owner, err := db.GetDBForOriginWrite(originID)
@@ -76,7 +102,6 @@ func seedDemoFlights() {
 		if destinationCode == "" {
 			continue
 		}
-		departure := start.Add(time.Duration(index) * time.Hour).Unix()
 		flight := models.Vuelo{
 			Demo: true, IDOrigen: originID, IDDestino: cityID[destinationCode],
 			IDEstadoVuelo: 1, IDPuerta: gateID[originID], IDAvion: plane.ID,

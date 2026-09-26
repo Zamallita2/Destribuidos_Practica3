@@ -16,3 +16,25 @@ func TestCompareEventVersionsDetectsCausalityAndBreaksConcurrentTie(t *testing.T
 		t.Fatal("concurrent tie loser accepted")
 	}
 }
+
+func TestObserveClockMergesThreeNodes(t *testing.T) {
+	vcMutex.Lock()
+	previousNode, previousClock := NodeID, GlobalVectorClock
+	NodeID, GlobalVectorClock = "europa", VectorClock{"europa": 2}
+	vcMutex.Unlock()
+	defer func() { NodeID, GlobalVectorClock = previousNode, previousClock }()
+
+	// Europa reads a ticket last written by America and Asia, then updates it.
+	ObserveClock(10, `{"america":4,"asia":1}`)
+	next := TickVectorClock()
+	if !IsVectorDominant(next, `{"america":4,"asia":1}`) {
+		t.Fatalf("the update must causally follow what it read: %s", next)
+	}
+	if snapshot := VectorClockSnapshot(); snapshot["america"] != 4 || snapshot["asia"] != 1 || snapshot["europa"] != 3 {
+		t.Fatalf("unexpected vector %v", snapshot)
+	}
+	// Two writes that did not see each other are concurrent: neither dominates.
+	if IsVectorDominant(`{"america":5,"europa":3}`, `{"asia":2,"europa":3}`) || IsVectorDominant(`{"asia":2,"europa":3}`, `{"america":5,"europa":3}`) {
+		t.Fatal("concurrent writes must not dominate each other")
+	}
+}

@@ -261,6 +261,17 @@ func previewDataset(content []byte, matrix data.MatricesJSON, planes map[uint]bo
 	}
 	rows, rejected := 0, 0
 	candidates := []models.Vuelo{}
+	// Airports get stable numeric IDs so aircraft positions can be tracked.
+	airportID := make(map[string]uint)
+	airportCode := make(map[uint]string)
+	airportKey := func(code string) uint {
+		if id, ok := airportID[code]; ok {
+			return id
+		}
+		id := uint(len(airportID) + 1)
+		airportID[code], airportCode[id] = id, code
+		return id
+	}
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -283,12 +294,25 @@ func previewDataset(content []byte, matrix data.MatricesJSON, planes map[uint]bo
 			departure, dateErr = time.ParseInLocation("01/02/06 3:04", dateTime, time.UTC)
 		}
 		if allowed && planeErr == nil && plane > 0 && planes[uint(plane)] && dateErr == nil {
-			candidates = append(candidates, models.Vuelo{IDAvion: uint(plane), SalidaProgramada: departure.Unix(), LlegadaProgramada: departure.Unix() + int64(hours*3600)})
+			candidates = append(candidates, models.Vuelo{ID: uint(rows), IDAvion: uint(plane), IDOrigen: airportKey(origin), IDDestino: airportKey(dest),
+				SalidaProgramada: departure.Unix(), LlegadaProgramada: departure.Unix() + int64(hours*3600)})
 		} else {
 			rejected++
 		}
 	}
-	accepted, conflicts := data.FilterAircraftOverlaps(candidates)
+	planeIDs := make([]uint, 0, len(planes))
+	for id, ok := range planes {
+		if ok {
+			planeIDs = append(planeIDs, id)
+		}
+	}
+	hoursBetween := func(from, to uint) float64 {
+		if duration := matrix.TravelTime[airportCode[from]][airportCode[to]]; duration != nil {
+			return *duration
+		}
+		return 0
+	}
+	accepted, _, conflicts := data.AssignAircraft(candidates, planeIDs, hoursBetween)
 	return rows, len(accepted), rejected + len(conflicts), nil
 }
 
@@ -328,7 +352,7 @@ func startInputJob(c *gin.Context) {
 
 func resetPostgres(conn *gorm.DB) error {
 	for _, query := range []string{
-		"DELETE FROM sync_outbox", "DELETE FROM ocupaciones_vuelo", "DELETE FROM boletos", "DELETE FROM vuelos",
+		"DELETE FROM sync_outbox", "DELETE FROM ocupaciones_vuelo", "DELETE FROM boletos", "DELETE FROM vuelos", "DELETE FROM reposicionamientos",
 		"DELETE FROM id_allocators WHERE name LIKE 'ticket_%' OR name LIKE 'flight_%'",
 	} {
 		if err := conn.Exec(query).Error; err != nil {
@@ -481,7 +505,7 @@ func runInputJob(id string) error {
 	updateJob(id, "running", 80, "Limpiando y sincronizando MongoDB", nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	for _, collection := range []string{"vuelos", "boletos", "ocupaciones_vuelo"} {
+	for _, collection := range []string{"vuelos", "boletos", "ocupaciones_vuelo", "reposicionamientos"} {
 		if _, err := db.MongoDatabase.Collection(collection).DeleteMany(ctx, bson.M{}); err != nil {
 			return err
 		}

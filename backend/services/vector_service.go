@@ -107,3 +107,24 @@ func ShouldApplyVersion(incomingVector, existingVector string, incomingLamport, 
 	}
 	return incomingNode > existingNode
 }
+
+// ObserveClock merges the clocks stored on a record this node is about to
+// change. Reading a version before writing a new one is a causal dependency,
+// so both clocks must reflect it: Lamport takes max+1 and the vector merges.
+func ObserveClock(lamport int64, vector string) {
+	if lamport > 0 {
+		GlobalLamportClock.UpdateClock(lamport)
+	}
+	UpdateVectorClock(vector)
+}
+
+// VectorClockSnapshot returns a copy of this node's current vector clock.
+func VectorClockSnapshot() VectorClock {
+	vcMutex.RLock()
+	defer vcMutex.RUnlock()
+	snapshot := make(VectorClock, len(GlobalVectorClock))
+	for node, value := range GlobalVectorClock {
+		snapshot[node] = value
+	}
+	return snapshot
+}

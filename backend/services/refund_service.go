@@ -67,6 +67,7 @@ func releaseRefunds(conn *gorm.DB) {
 				return nil
 			}
 			updated.Estado = "ANNULLED"
+			ObserveClock(updated.LamportClock, updated.VectorClock)
 			updated.LamportClock = GlobalLamportClock.Tick()
 			updated.VectorClock = TickVectorClock()
 			updated.SourceNode = NodeID

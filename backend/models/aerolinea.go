@@ -131,6 +131,18 @@ type FlightSeatAssignment struct {
 	Passport       string `json:"passport" bson:"passport"`
 }
 
+// Reposicionamiento is an empty positioning flight that moves an aircraft to
+// the origin of its next scheduled flight. It carries no passengers and is
+// identified by the flight it serves.
+type Reposicionamiento struct {
+	IDVueloSiguiente  uint  `gorm:"primaryKey;autoIncrement:false" json:"id_vuelo_siguiente" bson:"id_vuelo_siguiente"`
+	IDAvion           uint  `json:"id_avion" bson:"id_avion"`
+	IDOrigen          uint  `json:"id_origen" bson:"id_origen"`
+	IDDestino         uint  `json:"id_destino" bson:"id_destino"`
+	SalidaProgramada  int64 `json:"salida_programada" bson:"salida_programada"`
+	LlegadaProgramada int64 `json:"llegada_programada" bson:"llegada_programada"`
+}
+
 type MigrationMarker struct {
 	Key string `gorm:"primaryKey;size:80"`
 }

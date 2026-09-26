@@ -25,20 +25,137 @@ import (
 )
 
 func main() {
+	// Each API server is one node of the cluster. Only the primary runs the
+	// bulk import and housekeeping; every node serves requests, sells tickets
+	// and publishes the replication outbox.
+	primary := os.Getenv("NODE_PRIMARY") != "false"
+	log.Printf("[Node] %s starting (primary=%v, time zone %s)", services.NodeID, primary, time.Local)
+
 	// Initialize databases
 	db.InitPostgres()
 	db.InitMongoDB()
 
 	// Perform AutoMigrate
 	if db.IsAvailable(db.PGAmerica) {
-		db.PGAmerica.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{}, &models.SyncOutbox{}, &models.OcupacionVuelo{}, &models.MigrationMarker{}, &models.IDAllocator{})
+		db.PGAmerica.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{}, &models.SyncOutbox{}, &models.OcupacionVuelo{}, &models.MigrationMarker{}, &models.IDAllocator{}, &models.Reposicionamiento{})
 		db.EnsureBookingConstraints(db.PGAmerica)
 	}
 	if db.IsAvailable(db.PGEuropaAsia) {
-		db.PGEuropaAsia.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{}, &models.SyncOutbox{}, &models.OcupacionVuelo{}, &models.MigrationMarker{}, &models.IDAllocator{})
+		db.PGEuropaAsia.AutoMigrate(&models.Avion{}, &models.Ciudad{}, &models.Puerta{}, &models.Asiento{}, &models.EstadoVuelo{}, &models.Vuelo{}, &models.Boleto{}, &models.Precios{}, &models.DetallesVuelos{}, &models.SyncOutbox{}, &models.OcupacionVuelo{}, &models.MigrationMarker{}, &models.IDAllocator{}, &models.Reposicionamiento{})
 		db.EnsureBookingConstraints(db.PGEuropaAsia)
 	}
 	services.RestoreClocks()
+	if primary {
+		// On separate machines the other PostgreSQL may start later. The
+		// import writes each region's flights to its own database, so wait
+		// for both before importing instead of skipping a region.
+		waitForRegionalDatabases()
+		runPrimaryStartup()
+	}
+
+	// Start Background Multi-Master Syncing Goroutine. Every node publishes
+	// the shared outbox (events are claimed with SKIP LOCKED) and releases
+	// refunds under row locks, so these are safe to run on all servers.
+	go services.StartOutboxWorker()
+	go services.StartRefundWorker()
+	go startSyncMonitor()
+	if primary {
+		go seedMissingOccupancy()
+		go startReplicaReconciler()
+		go startRecoveryMonitor()
+		// A large existing dataset can take minutes to reconcile. Keep the API
+		// available while the persisted outbox and snapshots catch up in the back.
+		go func() {
+			reconcilePostgresReplicas()
+			seedMongoMatrices()
+			bootstrapMongo(false)
+			pruneMongoOrphans()
+		}()
+	}
+
+	r := gin.Default()
+	r.Use(func(c *gin.Context) {
+		c.Header("X-Served-By", services.NodeID)
+		c.Next()
+	})
+
+	// Configure CORS
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-User-Country", "X-Region"}
+	r.Use(cors.New(config))
+	r.Use(func(c *gin.Context) {
+		if services.InputImportActive.Load() && c.Request.URL.Path != "/api/health" && !strings.HasPrefix(c.Request.URL.Path, "/api/entradas") {
+			c.JSON(503, gin.H{"error": "Procesando nuevos datos de entrada; espera a que finalice"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	})
+
+	// Register Routes
+	routes.SetupRoutes(r)
+	registerInputRoutes(r)
+	r.GET("/api/sync/status", getSyncStatus)
+	r.GET("/api/node", getNodeInfo)
+	r.GET("/api/cluster", getClusterInfo)
+
+	// Health check endpoint
+	r.GET("/api/health", func(c *gin.Context) {
+		country := c.GetHeader("X-User-Country")
+		if country == "" {
+			country = "Unknown"
+		}
+		am, eu, mongo := db.IsAvailable(db.PGAmerica), db.IsAvailable(db.PGEuropaAsia), db.IsMongoAvailable()
+		status := "ok"
+		if !am || !eu || !mongo {
+			status = "degraded"
+		}
+		if !am && !eu {
+			status = "unavailable"
+		}
+		c.JSON(200, gin.H{
+			"status":  status,
+			"nodes":   gin.H{"postgres_america": am, "postgres_europa_asia": eu, "mongodb": mongo},
+			"message": "AirRes API is running",
+			"country": country,
+			"server":  services.NodeID,
+		})
+	})
+
+	log.Println("Starting server on :8080")
+	r.Run(":8080")
+}
+
+// waitForRegionalDatabases blocks until both PostgreSQL nodes answer, up to
+// STARTUP_WAIT_SECONDS (default 300). Tables are created as soon as each
+// database appears.
+func waitForRegionalDatabases() {
+	limit := 300
+	if value, err := strconv.Atoi(os.Getenv("STARTUP_WAIT_SECONDS")); err == nil && value >= 0 {
+		limit = value
+	}
+	deadline := time.Now().Add(time.Duration(limit) * time.Second)
+	for {
+		amUp, euUp := db.IsAvailable(db.PGAmerica), db.IsAvailable(db.PGEuropaAsia)
+		if amUp && euUp {
+			for _, conn := range []*gorm.DB{db.PGAmerica, db.PGEuropaAsia} {
+				migrateRecoveredNode(conn)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			log.Printf("[Startup] Continuing without every database (America=%v, Europa/Asia=%v)", amUp, euUp)
+			return
+		}
+		log.Printf("[Startup] Waiting for databases (America=%v, Europa/Asia=%v)", amUp, euUp)
+		time.Sleep(5 * time.Second)
+	}
+}
+
+// runPrimaryStartup seeds catalogs, matrices and the CSV import. Secondary
+// nodes start after the primary is healthy and reuse the imported data.
+func runPrimaryStartup() {
 	seedAirportCatalog()
 
 	// Seed Matrix Data
@@ -71,68 +188,6 @@ func main() {
 		log.Println("[Seed Flights] WARNING: Dataset CSV not found. Place flights.csv in backend/data/ or dataset/ folder.")
 	}
 	seedDemoFlights()
-
-	// Start Background Multi-Master Syncing Goroutine
-	go services.StartOutboxWorker()
-	go services.StartRefundWorker()
-	go seedMissingOccupancy()
-	go startReplicaReconciler()
-	go startRecoveryMonitor()
-	go startSyncMonitor()
-	// A large existing dataset can take minutes to reconcile. Keep the API
-	// available while the persisted outbox and snapshots catch up in the back.
-	go func() {
-		reconcilePostgresReplicas()
-		seedMongoMatrices()
-		bootstrapMongo(false)
-		pruneMongoOrphans()
-	}()
-
-	r := gin.Default()
-
-	// Configure CORS
-	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-User-Country", "X-Region"}
-	r.Use(cors.New(config))
-	r.Use(func(c *gin.Context) {
-		if services.InputImportActive.Load() && c.Request.URL.Path != "/api/health" && !strings.HasPrefix(c.Request.URL.Path, "/api/entradas") {
-			c.JSON(503, gin.H{"error": "Procesando nuevos datos de entrada; espera a que finalice"})
-			c.Abort()
-			return
-		}
-		c.Next()
-	})
-
-	// Register Routes
-	routes.SetupRoutes(r)
-	registerInputRoutes(r)
-	r.GET("/api/sync/status", getSyncStatus)
-
-	// Health check endpoint
-	r.GET("/api/health", func(c *gin.Context) {
-		country := c.GetHeader("X-User-Country")
-		if country == "" {
-			country = "Unknown"
-		}
-		am, eu, mongo := db.IsAvailable(db.PGAmerica), db.IsAvailable(db.PGEuropaAsia), db.IsMongoAvailable()
-		status := "ok"
-		if !am || !eu || !mongo {
-			status = "degraded"
-		}
-		if !am && !eu {
-			status = "unavailable"
-		}
-		c.JSON(200, gin.H{
-			"status":  status,
-			"nodes":   gin.H{"postgres_america": am, "postgres_europa_asia": eu, "mongodb": mongo},
-			"message": "AirRes API is running",
-			"country": country,
-		})
-	})
-
-	log.Println("Starting server on :8080")
-	r.Run(":8080")
 }
 
 func seedFlightsIfEmpty(conn *gorm.DB, csvPath, region string) {

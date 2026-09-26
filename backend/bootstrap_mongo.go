@@ -31,6 +31,7 @@ func bootstrapMongo(overwrite bool) {
 	var americanFlights, otherFlights []models.Vuelo
 	var americanTickets, otherTickets []models.Boleto
 	var americanOccupancy, otherOccupancy []models.OcupacionVuelo
+	var ferries []models.Reposicionamiento
 	for _, query := range []struct {
 		name string
 		err  error
@@ -46,6 +47,7 @@ func bootstrapMongo(overwrite bool) {
 		{"boletos_europa", db.PGEuropaAsia.Find(&otherTickets).Error},
 		{"ocupacion_america", db.PGAmerica.Where("id_vuelo < ?", 1000000000).Find(&americanOccupancy).Error},
 		{"ocupacion_europa", db.PGEuropaAsia.Where("id_vuelo >= ?", 1000000000).Find(&otherOccupancy).Error},
+		{"reposicionamientos", db.PGAmerica.Find(&ferries).Error},
 	} {
 		if query.err != nil {
 			log.Printf("[Bootstrap Mongo] Cannot read %s: %v", query.name, query.err)
@@ -81,6 +83,7 @@ func bootstrapMongo(overwrite bool) {
 		upsertSnapshot("vuelos", flights, func(v models.Vuelo) bson.M { return bson.M{"id": v.ID} }, overwrite),
 		upsertSnapshot("boletos", tickets, func(v models.Boleto) bson.M { return bson.M{"id_boleto": v.IDBoleto} }, overwrite),
 		upsertSnapshot("ocupaciones_vuelo", append(americanOccupancy, otherOccupancy...), func(v models.OcupacionVuelo) bson.M { return bson.M{"id_vuelo": v.IDVuelo} }, overwrite),
+		upsertSnapshot("reposicionamientos", ferries, func(v models.Reposicionamiento) bson.M { return bson.M{"id_vuelo_siguiente": v.IDVueloSiguiente} }, overwrite),
 	}
 	for _, err := range operations {
 		if err != nil {
@@ -100,6 +103,8 @@ func upsertSnapshot[T any](collection string, records []T, filter func(T) bson.M
 		key = "id_boleto"
 	} else if collection == "ocupaciones_vuelo" {
 		key = "id_vuelo"
+	} else if collection == "reposicionamientos" {
+		key = "id_vuelo_siguiente"
 	}
 	if _, err := coll.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: key, Value: 1}}, Options: options.Index().SetUnique(true)}); err != nil {
 		return err

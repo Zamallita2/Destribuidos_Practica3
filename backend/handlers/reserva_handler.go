@@ -19,8 +19,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// One API process serves the one-PC Compose stack. Serialize purchases of a
-// flight across buyer regions until its synchronous replica attempt finishes.
+// Serialize purchases of a flight inside this process before taking the
+// distributed lock, so local requests do not all wait on PostgreSQL.
 var bookingFlightLocks sync.Map
 
 func lockFlightBooking(flightID uint) func() {
@@ -135,6 +135,15 @@ func ReservarAsiento(c *gin.Context) {
 
 	unlock := lockFlightBooking(payload.IDVuelo)
 	defer unlock()
+	// Other API servers may sell the same flight into the other PostgreSQL.
+	lockContext, cancelLock := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancelLock()
+	releaseFlight, _, err := db.LockFlight(lockContext, payload.IDVuelo)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "No se pudo coordinar la compra entre servidores; inténtalo de nuevo"})
+		return
+	}
+	defer releaseFlight()
 
 	dbConn, _, err := db.GetDBForFlightPurchase(payload.IDVuelo, payload.PurchaseTimeZone)
 	if err != nil {
@@ -154,6 +163,7 @@ func ReservarAsiento(c *gin.Context) {
 		if err := services.ValidateBooking(vuelo, asiento, payload.EstadoDeseado, time.Now()); err != nil {
 			return err
 		}
+		services.ObserveClock(vuelo.LamportClock, vuelo.VectorClock)
 		manifest, err := services.EnsureFlightOccupancy(tx, vuelo)
 		if err != nil {
 			return err
@@ -270,6 +280,7 @@ func CancelarReserva(c *gin.Context) {
 		}
 		boleto.Estado = "REFUNDED"
 		boleto.AvailableAt = services.RefundAvailableAt(time.Now(), services.ConfiguredRefundDelay())
+		services.ObserveClock(boleto.LamportClock, boleto.VectorClock)
 		boleto.LamportClock = services.GlobalLamportClock.Tick()
 		boleto.VectorClock = services.TickVectorClock()
 		boleto.SourceNode = services.NodeID
@@ -297,9 +308,11 @@ func ListBoletos(c *gin.Context) {
 	boletos := []models.Boleto{}
 	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("boletos")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		cursor, _ := coll.Find(ctx, bson.M{})
-		cursor.All(ctx, &boletos)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if cursor, err := coll.Find(ctx, bson.M{}); err == nil {
+			cursor.All(ctx, &boletos)
+		}
 	} else if dbConn != nil {
 		dbConn.Find(&boletos)
 	} else {
@@ -354,6 +367,7 @@ func UpdateEstadoBoleto(c *gin.Context) {
 			return errors.New("transicion_invalida")
 		}
 		boleto.Estado = "SALED"
+		services.ObserveClock(boleto.LamportClock, boleto.VectorClock)
 		boleto.LamportClock = services.GlobalLamportClock.Tick()
 		boleto.VectorClock = services.TickVectorClock()
 		boleto.SourceNode = services.NodeID

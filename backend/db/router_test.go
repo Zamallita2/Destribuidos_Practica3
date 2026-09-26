@@ -25,3 +25,12 @@ func TestResolveReadSource(t *testing.T) {
 		})
 	}
 }
+
+func TestFlightLockOrderUsesOwnerRegionFirst(t *testing.T) {
+	if order := FlightLockOrder(100000005); order[0] != "pg_am" || order[1] != "pg_eu" {
+		t.Fatalf("american flight: %v", order)
+	}
+	if order := FlightLockOrder(1100000005); order[0] != "pg_eu" || order[1] != "pg_am" {
+		t.Fatalf("european/asian flight: %v", order)
+	}
+}

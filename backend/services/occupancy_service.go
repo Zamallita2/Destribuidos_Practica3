@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 
 	"airres-api/models"
@@ -33,6 +34,9 @@ func CurrentMatrixHash() string {
 	if matrixHash == "" {
 		content, err := os.ReadFile("data/matrices.json")
 		if err == nil {
+			// The percentages are part of the hash so changing them regenerates manifests.
+			soldPct, reservedPct := OccupancyPercentages()
+			content = append(content, fmt.Sprintf("|%g|%g", soldPct, reservedPct)...)
 			sum := sha256.Sum256(content)
 			matrixHash = hex.EncodeToString(sum[:])
 		}
@@ -46,14 +50,34 @@ func ResetMatrixHash() {
 	matrixHashMu.Unlock()
 }
 
+// OccupancyPercentages reads PERCENTAGE_SOLD and PERCENTAGE_RESERVED (defaults
+// 73 and 3). Invalid values fall back to the defaults.
+func OccupancyPercentages() (sold, reserved float64) {
+	sold = percentFromEnv("PERCENTAGE_SOLD", 73)
+	reserved = percentFromEnv("PERCENTAGE_RESERVED", 3)
+	if sold+reserved > 100 {
+		return 73, 3
+	}
+	return
+}
+
+func percentFromEnv(name string, fallback float64) float64 {
+	value, err := strconv.ParseFloat(os.Getenv(name), 64)
+	if err != nil || value < 0 || value > 100 {
+		return fallback
+	}
+	return value
+}
+
 // OccupancyTargets uses the nearest whole seat because capacities such as 228
 // cannot represent exactly 73% and 3% with indivisible seats.
 func OccupancyTargets(eligible int) (sold, reserved int) {
 	if eligible <= 0 {
 		return 0, 0
 	}
-	sold = int(math.Round(float64(eligible) * 0.73))
-	reserved = int(math.Round(float64(eligible) * 0.03))
+	soldPct, reservedPct := OccupancyPercentages()
+	sold = int(math.Round(float64(eligible) * soldPct / 100))
+	reserved = int(math.Round(float64(eligible) * reservedPct / 100))
 	if sold+reserved > eligible {
 		reserved = eligible - sold
 	}

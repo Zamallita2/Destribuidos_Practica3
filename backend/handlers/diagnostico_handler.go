@@ -33,5 +33,23 @@ func GetContinuityReport(c *gin.Context) {
 	for _, flight := range byID {
 		flights = append(flights, flight)
 	}
-	c.JSON(http.StatusOK, data.AnalyzeContinuity(flights))
+	// Both regions store the same positioning schedule; merge in case one missed it.
+	var americanFerries, otherFerries []models.Reposicionamiento
+	if err := db.PGAmerica.Find(&americanFerries).Error; err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
+	if err := db.PGEuropaAsia.Find(&otherFerries).Error; err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
+	ferryByFlight := make(map[uint]models.Reposicionamiento)
+	for _, ferry := range append(americanFerries, otherFerries...) {
+		ferryByFlight[ferry.IDVueloSiguiente] = ferry
+	}
+	ferries := make([]models.Reposicionamiento, 0, len(ferryByFlight))
+	for _, ferry := range ferryByFlight {
+		ferries = append(ferries, ferry)
+	}
+	c.JSON(http.StatusOK, data.AnalyzeContinuityWithRepositioning(flights, ferries))
 }

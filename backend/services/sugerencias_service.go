@@ -35,7 +35,8 @@ func getMatricesFromDB(region string) (map[string]map[string]float64, map[string
 
 	if reg == "Mongo" && db.MongoDatabase != nil {
 		collDetalles := db.MongoDatabase.Collection("detalles_vuelos")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		var resDetalles map[string]interface{}
 		collDetalles.FindOne(ctx, bson.M{}).Decode(&resDetalles)
 		if val, ok := resDetalles["matriz_tiempos"]; ok {

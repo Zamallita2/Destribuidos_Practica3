@@ -14,6 +14,7 @@ import (
 	"airres-api/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // MatricesJSON maps to matrices.json to check supported routes
@@ -107,14 +108,20 @@ func ImportFlightsFromCSV(dbConn *gorm.DB, csvPath, matrixPath, ownerRegion stri
 	var ciudades []models.Ciudad
 	dbConn.Find(&ciudades)
 	ciudadByCode := make(map[string]uint)
+	codeByID := make(map[uint]string)
+	americanCity := make(map[uint]bool)
 	for _, c := range ciudades {
 		ciudadByCode[c.Codigo] = c.ID
+		codeByID[c.ID] = c.Codigo
+		americanCity[c.ID] = c.Region == "America"
 	}
 	var planes []models.Avion
 	dbConn.Select("id").Find(&planes)
 	validPlane := make(map[uint]bool, len(planes))
+	planeIDs := make([]uint, 0, len(planes))
 	for _, plane := range planes {
 		validPlane[plane.ID] = true
+		planeIDs = append(planeIDs, plane.ID)
 	}
 
 	// Build puerta lookup: puerta_str -> id
@@ -135,16 +142,14 @@ func ImportFlightsFromCSV(dbConn *gorm.DB, csvPath, matrixPath, ownerRegion stri
 		return 0, fmt.Errorf("no hay puertas disponibles")
 	}
 
-	// Existing data may have been imported under the old both-fares rule.
-	// Count matching rows so even duplicate CSV records are treated correctly.
-	var existing []models.Vuelo
-	if err := dbConn.Select("id_avion", "id_origen", "id_destino", "salida_programada").Find(&existing).Error; err != nil {
+	// Flight IDs are deterministic, so rows imported earlier are skipped by ID.
+	var existingIDs []uint
+	if err := dbConn.Model(&models.Vuelo{}).Pluck("id", &existingIDs).Error; err != nil {
 		return 0, fmt.Errorf("consultar vuelos existentes: %w", err)
 	}
-	existingCounts := make(map[string]int, len(existing))
-	for _, v := range existing {
-		key := fmt.Sprintf("%d:%d:%d:%d", v.IDAvion, v.IDOrigen, v.IDDestino, v.SalidaProgramada)
-		existingCounts[key]++
+	existing := make(map[uint]bool, len(existingIDs))
+	for _, id := range existingIDs {
+		existing[id] = true
 	}
 
 	// Parse location reference for timezone (we use UTC timestamps)
@@ -226,11 +231,6 @@ func ImportFlightsFromCSV(dbConn *gorm.DB, csvPath, matrixPath, ownerRegion stri
 		}
 		llegadaUnix := salidaUnix + int64(hours*3600)
 		estadoID := FlightStatusAt(salidaUnix, llegadaUnix, time.Now().Unix())
-		key := fmt.Sprintf("%d:%d:%d:%d", acID, originID, destID, salidaUnix)
-		if existingCounts[key] > 0 {
-			existingCounts[key]--
-			continue
-		}
 
 		vuelo := models.Vuelo{
 			ID:                uint(100000000 + i + 1),
@@ -246,32 +246,46 @@ func ImportFlightsFromCSV(dbConn *gorm.DB, csvPath, matrixPath, ownerRegion stri
 			FechaSalida:       salidaUnix,
 			FechaLlegada:      llegadaUnix,
 		}
-		if ownerRegion != "America" {
+		// The ID depends on the origin's region so both regional imports assign
+		// aircraft over the same IDs and reach identical results.
+		if !americanCity[originID] {
 			vuelo.ID += 1000000000
 		}
 		vuelos = append(vuelos, vuelo)
 	}
 
-	// Resolve conflicts against every CSV row, including flights owned by the other region.
-	vuelos, conflicts := FilterAircraftOverlaps(vuelos)
+	// Assign aircraft across every CSV row, including flights owned by the other
+	// region, so aircraft never overlap or appear at an airport they did not fly to.
+	hoursBetween := func(from, to uint) float64 {
+		if duration := matrices.TravelTime[codeByID[from]][codeByID[to]]; duration != nil {
+			return *duration
+		}
+		return 0
+	}
+	vuelos, ferries, conflicts := AssignAircraft(vuelos, planeIDs, hoursBetween)
 	for _, rejected := range conflicts {
-		logRejection([]string{fmt.Sprint(rejected.ID)}, "El avión tiene otro vuelo durante este horario")
+		logRejection([]string{fmt.Sprint(rejected.ID)}, "Ningún avión puede estar en el aeropuerto de origen a tiempo")
 	}
 	owned := vuelos[:0]
 	for _, flight := range vuelos {
-		for _, city := range ciudades {
-			if city.ID == flight.IDOrigen && (city.Region == "America") == (ownerRegion == "America") {
-				owned = append(owned, flight)
-				break
-			}
+		if americanCity[flight.IDOrigen] == (ownerRegion == "America") && !existing[flight.ID] {
+			owned = append(owned, flight)
 		}
 	}
 	vuelos = owned
 
-	if logFile != nil {
-		logFile.WriteString(fmt.Sprintf("\n--- RESUMEN FINAL ---\n%d vuelos admitidos; %d solapamientos rechazados.\n", len(vuelos), len(conflicts)))
+	// Every region stores the full positioning schedule; it is identical in both.
+	for start := 0; start < len(ferries); start += 500 {
+		batch := ferries[start:min(start+500, len(ferries))]
+		if err := dbConn.Clauses(clause.OnConflict{DoNothing: true}).Create(&batch).Error; err != nil {
+			return 0, fmt.Errorf("insertar reposicionamientos: %w", err)
+		}
 	}
-	log.Printf("[Seed Flights] Dataset loaded. Starting import of %d valid flights.", len(vuelos))
+
+	if logFile != nil {
+		logFile.WriteString(fmt.Sprintf("\n--- RESUMEN FINAL ---\n%d vuelos admitidos; %d rechazados por falta de avión; %d reposicionamientos.\n", len(vuelos), len(conflicts), len(ferries)))
+	}
+	log.Printf("[Seed Flights] Dataset loaded. Starting import of %d valid flights (%d repositionings).", len(vuelos), len(ferries))
 
 	// Bulk insert in batches of 500 for performance
 	batchSize := 500

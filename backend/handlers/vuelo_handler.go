@@ -168,9 +168,11 @@ func GetAllCiudades(c *gin.Context) {
 	ciudades := []models.Ciudad{}
 	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("ciudades")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		cursor, _ := coll.Find(ctx, bson.M{})
-		cursor.All(ctx, &ciudades)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if cursor, err := coll.Find(ctx, bson.M{}); err == nil {
+			cursor.All(ctx, &ciudades)
+		}
 	} else if dbConn != nil {
 		dbConn.Find(&ciudades)
 	}
@@ -189,9 +191,11 @@ func GetAllAviones(c *gin.Context) {
 	aviones := []models.Avion{}
 	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("aviones")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-		cursor, _ := coll.Find(ctx, bson.M{})
-		cursor.All(ctx, &aviones)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if cursor, err := coll.Find(ctx, bson.M{}); err == nil {
+			cursor.All(ctx, &aviones)
+		}
 	} else if dbConn != nil {
 		dbConn.Find(&aviones)
 	}
@@ -210,7 +214,8 @@ func GetTiempos(c *gin.Context) {
 	var detalles models.DetallesVuelos
 	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("detalles_vuelos")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		var result map[string]interface{}
 		if err := coll.FindOne(ctx, bson.M{}).Decode(&result); err == nil {
 			if val, ok := result["matriz_tiempos"]; ok {
@@ -239,7 +244,8 @@ func GetPrecios(c *gin.Context) {
 	var precios models.Precios
 	if region == "Mongo" && db.MongoDatabase != nil {
 		coll := db.MongoDatabase.Collection("precios")
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 		var result map[string]interface{}
 		if err := coll.FindOne(ctx, bson.M{}).Decode(&result); err == nil {
 			if valR, ok := result["matriz_precios_regular"]; ok {
@@ -417,6 +423,7 @@ func UpdateEstadoVuelo(c *gin.Context) {
 		if vuelo.SalidaProgramada > time.Now().Unix() {
 			vuelo.IDEstadoVuelo = 1
 		}
+		services.ObserveClock(vuelo.LamportClock, vuelo.VectorClock)
 		vuelo.LamportClock = services.GlobalLamportClock.Tick()
 		vuelo.VectorClock = services.TickVectorClock()
 		vuelo.SourceNode = services.NodeID
