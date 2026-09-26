@@ -42,6 +42,7 @@
     "tsp": "Agente Viajero",
     "inputs": "Datos de entrada",
     "sync": "Sincronización",
+    "queries": "Consultas",
     "settings": "Ajustes"
   }
 }

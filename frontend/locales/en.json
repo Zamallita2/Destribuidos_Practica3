@@ -42,6 +42,7 @@
     "tsp": "Traveling Salesperson",
     "inputs": "Input Data",
     "sync": "Synchronization",
+    "queries": "Queries",
     "settings": "Settings"
   }
 }

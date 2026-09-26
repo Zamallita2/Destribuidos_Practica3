@@ -34,6 +34,8 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/diagnostico/continuidad", handlers.GetContinuityReport)
 	api.GET("/dashboard", handlers.GetDashboardSummary)
 	api.GET("/dashboard/vuelos/:id", handlers.GetFlightDashboard)
+	api.GET("/consultas/:report", handlers.GetConsulta)
+	api.POST("/consultas/sql", handlers.RunReadOnlySQL)
 	api.POST("/vuelos", handlers.CreateVuelo)
 	api.GET("/vuelos/:id/asientos", handlers.ListAsientos)
 	api.PUT("/vuelos/:id/estado", handlers.UpdateEstadoVuelo)
