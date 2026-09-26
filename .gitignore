@@ -7,3 +7,7 @@
 /backend/data/qr-lan-url.txt.tmp
 /backend/data/qr-network-watcher.pid
 /backend/uploads/
+
+# Binarios compilados del backend
+*.exe
+/backend/airres-api
