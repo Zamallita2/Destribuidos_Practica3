@@ -1,0 +1,26 @@
+# PC 1 · Base de datos PostgreSQL América.
+# Uso, desde la carpeta distribuido/:
+#   docker compose -f docker-compose.pc1-america.yml up -d
+name: airres-pc1
+
+services:
+  postgres_am:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: airres_am
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_am:/var/lib/postgresql/data
+      - ../init-scripts/init-pg-am.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata_am:

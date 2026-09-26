@@ -1,0 +1,62 @@
+# PC 3 · MongoDB + backend + página web.
+# Encender DESPUÉS de las PCs 1 y 2: el backend importa los vuelos al
+# arrancar y solo lo hace en las bases que en ese momento responden.
+# Uso, desde la carpeta distribuido/:
+#   docker compose -f docker-compose.pc3-app.yml up -d --build
+name: airres-pc3
+
+services:
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: airres_sync
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+      - ../init-scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DB_PG1_DSN: host=${AM_HOST} user=postgres password=${POSTGRES_PASSWORD} dbname=airres_am port=5432 sslmode=disable connect_timeout=5
+      DB_PG2_DSN: host=${EU_HOST} user=postgres password=${POSTGRES_PASSWORD} dbname=airres_eu port=5435 sslmode=disable connect_timeout=5
+      DB_MONGO_URI: mongodb://root:${MONGO_PASSWORD}@mongodb:27017/
+      DB_MONGO_NAME: airres_sync
+      PERCENTAGE_SOLD: "73"
+      REFUND_DELAY_MINUTES: "15"
+      SEED_DEMO_FLIGHTS: "false"
+      BOARDING_PASS_SECRET: ${BOARDING_PASS_SECRET}
+      PUBLIC_BASE_URL: http://${APP_HOST}:3001
+      QR_LAN_URL_FILE: /app/data/qr-lan-url.txt
+    depends_on:
+      - mongodb
+    volumes:
+      - ../backend/uploads:/app/uploads
+      - ../backend/data:/app/data
+      - ../dataset:/app/dataset
+      - ../reports:/app/reports
+      - ../wallet-secrets:/run/wallet-secrets:ro
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://backend:8080
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+
+volumes:
+  mongodata:
