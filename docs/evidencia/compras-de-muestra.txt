@@ -1,0 +1,8 @@
+Compras de muestra (una por servidor regional)
+
+- María Fernanda Rojas: HTTP 200 | boleto #8 | vuelo AP-1100019481 PEK->DXB | asiento 2C (Primera) | $945
+  atendido por servidor: america | guardado primero en: pg_am | Lamport 4466 | vector {"america":1623,"asia":6,"europa":7}
+- Hans Müller: HTTP 200 | boleto #1000000015 | vuelo AP-1100001728 LON->MAD | asiento 5F (Turística) | $200
+  atendido por servidor: europa | guardado primero en: pg_eu | Lamport 4466 | vector {"america":1622,"asia":6,"europa":8}
+- 李明 Li Ming: HTTP 200 | boleto #1000000016 | vuelo AP-1100047003 LON->AMS | asiento 5A (Turística) | $150
+  atendido por servidor: asia | guardado primero en: pg_eu | Lamport 4466 | vector {"america":1622,"asia":7,"europa":7}

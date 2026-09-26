@@ -2,7 +2,7 @@
 
 ## Importación del CSV
 
-`backend/data/matrices.json` define las rutas dirigidas. Se importa una fila si sus dos aeropuertos están en `airports`, la duración dirigida es positiva y existe una tarifa positiva en **Primera o Turista**. Una tarifa nula deja indisponible esa clase, pero no invalida la otra. El sentido inverso se evalúa por separado. No se filtra por continuidad física del avión.
+`backend/data/matrices.json` define las rutas dirigidas. Se importa una fila si sus dos aeropuertos están en `airports`, la duración dirigida es positiva y existe una tarifa positiva en **Primera o Turista**. Una tarifa nula deja indisponible esa clase, pero no invalida la otra. El sentido inverso se evalúa por separado. Después se asigna a cada vuelo un avión que realmente esté en el aeropuerto de origen, con vuelos de reposicionamiento cuando hace falta; los vuelos que ningún avión puede cubrir se rechazan (ver [arquitectura-distribuida.md](arquitectura-distribuida.md), sección 6).
 
 Al arrancar, la aplicación escribe `reports/vuelos_rechazados.csv` con las columnas originales del CSV y `motivo_rechazo`. Solo aparecen rechazos por aeropuerto fuera del catálogo, origen igual al destino o falta de ruta en la matriz. Otros errores de formato se registran por separado. El archivo es UTF-8 y puede abrirse en Excel.
 
@@ -14,9 +14,9 @@ En la interfaz, **Vuelos → Todos los vuelos** consulta el catálogo completo c
 
 Cada vuelo tiene un manifiesto propio en `ocupaciones_vuelo`. Incluye un asiento y un pasajero simulado para cada plaza inicialmente vendida (`SALED`) o reservada (`RESERVED`). La lista de nombres incluye caracteres latinos, chinos, japoneses y árabes. Un vuelo sin tarifa para una clase muestra esos asientos como `BLOCKED`; solo las plazas comercializables forman la base del 73 % y el 3 %.
 
-Los asientos son indivisibles: se usa `round(plazas_comercializables × 0,73)` y `round(plazas_comercializables × 0,03)`. Por ejemplo, 228 plazas producen 166 vendidas y 7 reservadas. El manifiesto se genera de forma determinista y se guarda en PostgreSQL, se replica al otro PostgreSQL y se proyecta a MongoDB. Una tarea de fondo llena los manifiestos faltantes; consultar asientos o reservar genera el manifiesto de ese vuelo de inmediato. `GET /api/dashboard` informa cuántos manifiestos se han generado.
+Los asientos son indivisibles: se usa `round(plazas_comercializables × 0,73)` y `round(plazas_comercializables × 0,03)`. Los porcentajes se configuran con `PERCENTAGE_SOLD` y `PERCENTAGE_RESERVED`. Por ejemplo, 228 plazas producen 166 vendidas y 7 reservadas. El manifiesto se genera de forma determinista y se guarda en PostgreSQL, se replica al otro PostgreSQL y se proyecta a MongoDB. Una tarea de fondo llena los manifiestos faltantes; consultar asientos o reservar genera el manifiesto de ese vuelo de inmediato. `GET /api/dashboard` informa cuántos manifiestos se han generado.
 
-En una primera carga de unos 30.000 vuelos, esa tarea puede durar varios minutos y la sincronización de sus eventos puede continuar después. Es normal ver el proceso activo: `docker compose up --build` mantiene la terminal unida a los servicios. Para dejarlo en segundo plano, usar `docker compose up -d --build`; revisar `docker compose logs --tail=30 backend` y `http://localhost:8080/api/health`. La API debe responder durante el llenado. Los eventos pendientes quedan en `sync_outbox` y se reintentan tras reiniciar, sin volver a importar los vuelos ya guardados.
+En una primera carga de unos 1.600 vuelos, esa tarea puede durar varios minutos y la sincronización de sus eventos puede continuar después. Es normal ver el proceso activo: `docker compose up --build` mantiene la terminal unida a los servicios. Para dejarlo en segundo plano, usar `docker compose up -d --build`; revisar `docker compose logs --tail=30 backend_am` y `http://localhost:8080/api/health`. La API debe responder durante el llenado. Los eventos pendientes quedan en `sync_outbox` y se reintentan tras reiniciar, sin volver a importar los vuelos ya guardados.
 
 Los boletos posteriores se guardan como registros separados. La capital de compra determina la PostgreSQL donde se registra primero el boleto: América o Europa/Asia. El ID del boleto usa el rango de la PostgreSQL que aceptó la escritura. La reserva usa una transacción, bloqueo del vuelo, una verificación de la otra réplica disponible y un índice único sobre `(id_vuelo, id_asiento)` para estados activos. Un bloqueo por vuelo en la API serializa compras de ambas regiones durante la replicación inmediata. Un asiento ocupado en el manifiesto tampoco puede comprarse de nuevo. Una cancelación pasa por `REFUNDED` y queda disponible al vencer `REFUND_DELAY_MINUTES` (15 por defecto).
 
@@ -46,8 +46,8 @@ Los endpoints oficiales siguen siendo opcionales y no son necesarios para la dem
 
 1. Reemplazar el CSV en `dataset/` y `backend/data/matrices.json`, conservando las claves `airports`, `travel_time`, `economy_fares` y `first_class_fares`.
 2. Si aparecen aeropuertos nuevos, añadir su país, región y zona IANA a `backend/data/airports.json`. No es posible deducir con seguridad la zona horaria o región solo del código en la matriz.
-3. Reiniciar el backend con `docker compose up -d --build backend`. Las matrices se actualizan en ambas bases y Mongo; el importador agrega filas nuevas sin borrar vuelos que puedan tener boletos. Los manifiestos se regeneran al detectar un cambio de matriz y conservan las compras activas.
-4. Revisar `reports/vuelos_rechazados.csv` y `GET /api/diagnostico/continuidad`. El diagnóstico informa saltos físicos, pero no descarta vuelos.
+3. Reiniciar el backend con `docker compose up -d --build backend_am backend_eu backend_as`. Las matrices se actualizan en ambas bases y Mongo; el importador agrega filas nuevas sin borrar vuelos que puedan tener boletos. Los manifiestos se regeneran al detectar un cambio de matriz y conservan las compras activas.
+4. Revisar `reports/vuelos_rechazados.csv` y `GET /api/diagnostico/continuidad`. El diagnóstico cuenta los reposicionamientos y debe informar 0 saltos y 0 superposiciones.
 5. Si la intención es **reemplazar** por completo un dataset anterior, respaldar los boletos y realizar una migración explícita de vuelos históricos. La importación habitual es aditiva para no borrar reservas reales.
 
 ## Demostración aislada

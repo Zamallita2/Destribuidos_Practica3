@@ -1,5 +1,18 @@
 # Demostración de caída real de nodos
 
+## Servidores de aplicación
+
+El sistema tiene tres servidores: `backend_am` (La Paz, principal), `backend_eu` (Berlín) y `backend_as` (Pekín). En **Sincronización → Servidores de aplicación** se ve la hora local, el reloj de Lamport y el reloj vectorial de cada uno. Para probar la caída de un servidor:
+
+```powershell
+docker compose stop backend_eu
+docker compose start backend_eu
+```
+
+Mientras está detenido, su tarjeta aparece **DOWN** y el gateway envía las peticiones de Europa a otro servidor. Las compras siguen funcionando. Unos 10 segundos después de iniciarlo, las peticiones vuelven a su servidor.
+
+## Bases de datos
+
 Abre [Sincronización](http://localhost:3001/sincronizacion) con el proyecto iniciado. El panel consulta las conexiones reales cada cuatro segundos. No hay botón de simulación: los cambios aparecen cuando un servidor deja de responder.
 
 Desde la carpeta del proyecto, detén **solo una** base a la vez:

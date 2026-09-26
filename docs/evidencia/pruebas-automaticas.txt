@@ -1,0 +1,43 @@
+--- PASS: TestPreviewDatasetRejectsAircraftThatCannotReachOrigin (0.00s)
+--- PASS: TestPreviewDatasetReassignsFreeAircraftAtOrigin (0.00s)
+--- PASS: TestPreviewDatasetRepositionsAircraftWhenRouteExists (0.00s)
+ok  	airres-api	0.035s
+?   	airres-api/config	[no test files]
+--- PASS: TestAnalyzeContinuityReportsButKeepsFlights (0.00s)
+--- PASS: TestFlightStatusAtBoundaries (0.00s)
+--- PASS: TestAssignAircraftNeverTeleports (0.00s)
+--- PASS: TestAssignAircraftUsesAnotherAircraftWaitingAtOrigin (0.00s)
+--- PASS: TestAssignAircraftRejectsWhenNoAircraftCanArrive (0.00s)
+--- PASS: TestCurrentMatrixIsValid (0.01s)
+--- PASS: TestDatasetCSVReadsCSVAndExcel (0.00s)
+--- PASS: TestDatasetCSVNormalizesSpanishColumns (0.00s)
+--- PASS: TestMatrixGridAndValidationRejectMissingCell (0.00s)
+--- PASS: TestMatrixExcelAllowsBlankTrailingFare (0.00s)
+--- PASS: TestMatrixGridInvalidCellsBecomeNullAndFarePrecisionIsLimited (0.00s)
+--- PASS: TestRouteAvailabilityAllowsEitherClassAndKeepsDirection (0.00s)
+--- PASS: TestGenerateRejectedCSVOnlyCityAndMatrix (0.00s)
+ok  	airres-api/data	0.082s
+--- PASS: TestPurchaseWriteOrderUsesBuyerLocationBeforeFlightOrigin (0.00s)
+--- PASS: TestResolveReadSource (0.00s)
+--- PASS: TestFlightLockOrderUsesOwnerRegionFirst (0.00s)
+ok  	airres-api/db	0.068s
+--- PASS: TestDemoPassPackageUnsigned (0.02s)
+--- PASS: TestGoogleWalletLinkSignsPassData (0.07s)
+--- PASS: TestVerificationURLUsesReachableFrontendHost (0.00s)
+--- PASS: TestQRUsesCurrentWiFiAddressAfterNetworkChange (0.00s)
+--- PASS: TestWalletDownloadURLUsesReachableFrontendHost (0.00s)
+ok  	airres-api/handlers	0.131s
+?   	airres-api/models	[no test files]
+?   	airres-api/routes	[no test files]
+?   	airres-api/scratch	[no test files]
+--- PASS: TestBookingRulesRequireFutureFlightAndMatchingSeat (0.00s)
+--- PASS: TestRouteFareRejectsMissingClassAndDirection (0.00s)
+--- PASS: TestFlightManifestHasRoundedTargetsAndUnicodePassengers (0.00s)
+--- PASS: TestOccupancyTargetsUseConfiguredPercentages (0.00s)
+--- PASS: TestOutboxEventRoundTripPreservesTicketVersion (0.00s)
+--- PASS: TestRefundAvailabilityUsesConfiguredDelay (0.00s)
+--- PASS: TestTSPTimeDoesNotUseRouteWithoutFareInSelectedClass (0.00s)
+--- PASS: TestTSPCanRequireDirectedReturn (0.00s)
+--- PASS: TestCompareEventVersionsDetectsCausalityAndBreaksConcurrentTie (0.00s)
+--- PASS: TestObserveClockMergesThreeNodes (0.00s)
+ok  	airres-api/services	0.076s

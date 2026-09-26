@@ -1,0 +1,99 @@
+Registro de pruebas - Aerolíneas Rafael Pabón - 2026-09-26 09:50:59
+
+==============================================================================
+1. Servidores de aplicación y bases de datos
+==============================================================================
+backend_am	Up 39 minutes (healthy)
+backend_as	Up 39 minutes
+backend_eu	Up 39 minutes
+frontend	Up 39 minutes
+gateway	Up 43 minutes
+mongodb	Up 43 minutes
+postgres_am	Up 43 minutes (healthy)
+postgres_eu	Up 43 minutes (healthy)
+
+/api/health: {"mongodb": true, "postgres_america": true, "postgres_europa_asia": true}
+
+Relojes de los tres servidores (/api/cluster):
+  america  up=True  zona=America/La_Paz   hora=2026-09-26 09:50:59 -04  lamport=4472  vector={'america': 1623, 'asia': 6, 'europa': 7}
+  asia     up=True  zona=Asia/Shanghai    hora=2026-09-26 21:50:59 CST  lamport=4472  vector={'america': 1622, 'asia': 7, 'europa': 8}
+  europa   up=True  zona=Europe/Berlin    hora=2026-09-26 15:50:59 CEST  lamport=4472  vector={'america': 1622, 'asia': 7, 'europa': 8}
+
+==============================================================================
+2. Enrutamiento regional (gateway nginx, cabecera X-Region)
+==============================================================================
+  X-Region America  -> atendido por america
+  X-Region Europa   -> atendido por europa
+  X-Region Asia     -> atendido por asia
+
+==============================================================================
+3. Datos de entrada y reglas del sistema
+==============================================================================
+  Vuelos cargados: 1614  | estados: {'1': 1177, '5': 437} (1=SCHEDULED, 5=LANDED)
+  Continuidad de aviones: vuelos=1614 transiciones=2651 saltos=0 superposiciones=0 reposicionamientos=1087
+  Ocupación vuelo AP-1100001728: capacidad=310 vendidos=232 (74.8%) reservados=9 (2.9%)
+  Dashboard general: vendidos=344138 reservados=14014 ingresos primera=$11,158,333 turística=$239,279,350
+
+==============================================================================
+4. Prevención de doble reserva entre los tres servidores
+==============================================================================
+  Asientos disputados: 20 (3 compradores simultáneos por asiento)
+  Respuestas: {200: 20, 409: 40}
+  Atendidas por servidor: {'europa': 20, 'america': 20, 'asia': 20} | guardadas en: {'pg_eu': 15, 'pg_am': 5}
+  Asientos vendidos más de una vez: 0
+
+==============================================================================
+5. Relojes de Lamport y vectoriales (causalidad y concurrencia)
+==============================================================================
+  america  up=True  zona=America/La_Paz   hora=2026-09-26 09:51:00 -04  lamport=4510  vector={'america': 1628, 'asia': 10, 'europa': 11}
+  asia     up=True  zona=Asia/Shanghai    hora=2026-09-26 21:51:00 CST  lamport=4508  vector={'america': 1622, 'asia': 14, 'europa': 10}
+  europa   up=True  zona=Europe/Berlin    hora=2026-09-26 15:51:00 CEST  lamport=4504  vector={'america': 1622, 'asia': 7, 'europa': 16}
+  Últimos boletos (id | servidor | Lamport | vector):
+   13 | america | L=4507 | {"america":1628,"asia":10,"europa":11}
+   1000000031 | asia | L=4505 | {"america":1622,"asia":14,"europa":10}
+   12 | america | L=4503 | {"america":1627,"asia":10,"europa":11}
+   1000000029 | asia | L=4501 | {"america":1622,"asia":13,"europa":10}
+   1000000030 | europa | L=4501 | {"america":1622,"asia":7,"europa":16}
+   11 | america | L=4499 | {"america":1626,"asia":10,"europa":11}
+
+==============================================================================
+6. Cancelación y consistencia eventual (REFUNDED -> disponible)
+==============================================================================
+  Compra boleto #1000000032: HTTP 200; cancelación: HTTP 200 {'available_at': 1790431560, 'message': 'Devolución iniciada'}
+  El asiento se libera en 15.0 minutos (REFUND_DELAY_MINUTES=15)
+  postgres_am: estado=REFUNDED available_at=1790431560
+  postgres_eu: estado=REFUNDED available_at=1790431560
+
+==============================================================================
+7. Tolerancia a fallos: servidor de aplicación caído
+==============================================================================
+  Container destribuidos_practica3-backend_as-1 Stopped
+  X-Region Asia con su servidor caído -> atendido por america
+  Compra desde Asia: HTTP 200, servidor europa, base pg_eu
+  Container destribuidos_practica3-backend_as-1 Started
+  Recuperado: X-Region Asia -> asia
+
+==============================================================================
+8. Tolerancia a fallos: base de datos caída y reconciliación
+==============================================================================
+  Container destribuidos_practica3-postgres_eu-1 Stopped
+  /api/health: degraded {'mongodb': True, 'postgres_america': True, 'postgres_europa_asia': False}
+  Compra desde Europa con PG Europa caído: HTTP 200, base pg_am, boleto #14
+  Container destribuidos_practica3-postgres_eu-1 Started
+  Tras recuperar: boletos pg_am=47 pg_eu=47 mongo=47 pendientes=0
+
+==============================================================================
+9. Algoritmos: Dijkstra (Top 3) y TSP
+==============================================================================
+  TYO->ATL por costo: TYO->ATL $1400 16h | TYO->DXB->DFW->ATL $2150 27h | TYO->PEK->AMS->ATL $2180 22h
+  TYO->ATL por tiempo: TYO->ATL $1400 16h | TYO->PEK->AMS->ATL $2180 22h | TYO->PEK->LON->AMS->ATL $2330 23h
+  TSP (Held-Karp) comparado con búsqueda exhaustiva: 80 casos, 0 diferencias
+
+==============================================================================
+10. Rendimiento
+==============================================================================
+  300 compras repartidas entre los 3 servidores en 2.21s = 136 compras/s; respuestas {200: 300}
+
+==============================================================================
+Fin del registro
+==============================================================================
