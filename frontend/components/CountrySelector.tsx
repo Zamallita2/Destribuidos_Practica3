@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Globe, Check, Search, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface Country {
   nameES: string;
@@ -12,6 +13,10 @@ interface Country {
 }
 
 export default function CountrySelector() {
+  const { language } = useLanguage();
+  const countryName = (country: Country) => language === "en"
+    ? new Intl.DisplayNames(["en"], { type: "region" }).of(country.iso2) || country.nameEN
+    : country.nameES;
   const [isOpen, setIsOpen] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -69,7 +74,7 @@ export default function CountrySelector() {
         className="flex items-center gap-2 px-4 py-2 glass-card hover:bg-white/10 transition-colors rounded-full text-sm font-medium border border-gray-700/50"
       >
         <Globe className="w-4 h-4 text-blue-400" />
-        <span>{selected.name}</span>
+        <span>{countries.find((country) => country.iso2 === selected.code) ? countryName(countries.find((country) => country.iso2 === selected.code)!) : selected.name}</span>
       </button>
 
       <AnimatePresence>
@@ -112,8 +117,8 @@ export default function CountrySelector() {
                     }`}
                   >
                     <div className="flex flex-col items-start translate-x-0 group-hover:translate-x-1 transition-transform">
-                      <span className="font-heading">{c.nameES}</span>
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Servidor: {c.server}</span>
+                      <span className="font-heading">{countryName(c)}</span>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">{language === "en" ? "Server" : "Servidor"}: {c.server}</span>
                     </div>
                     {selected.code === c.iso2 && <Check className="w-4 h-4 text-blue-400" />}
                   </button>

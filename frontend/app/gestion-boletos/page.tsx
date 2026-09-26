@@ -14,9 +14,13 @@ import {
   FileText,
 } from "lucide-react";
 import { downloadBoardingPassPdf } from "@/lib/boardingPassPdf";
+import { translateUiText } from "@/lib/englishUi";
+import { useLanguage } from "@/context/LanguageContext";
 import QRNetworkInfo from "@/components/QRNetworkInfo";
 
 export default function GestionBoletos() {
+  const { language } = useLanguage();
+  const localized = (message: string) => language === "en" ? translateUiText(message) : message;
   const [boletos, setBoletos] = useState<any[]>([]);
   const [vuelos, setVuelos] = useState<any[]>([]);
   const [ciudades, setCiudades] = useState<any[]>([]);
@@ -81,7 +85,7 @@ export default function GestionBoletos() {
   }, [selectedBoleto?.id_boleto, selectedBoleto?.estado]);
 
   const changeTicketState = async (boletoId: number, newState: string) => {
-    if (!confirm(`¿Estás seguro que deseas cambiar el estado a ${newState}?`)) return;
+    if (!confirm(localized(`¿Estás seguro que deseas cambiar el estado a ${newState}?`))) return;
 
     setUpdating(true);
     try {
@@ -105,7 +109,7 @@ export default function GestionBoletos() {
         }
       } else {
         const d = await res.json();
-        alert(d.error || "Hubo un error actualizando el estado");
+        alert(localized(d.error || "Hubo un error actualizando el estado"));
       }
     } catch (e) {
       console.error(e);
@@ -156,7 +160,7 @@ export default function GestionBoletos() {
       await downloadBoardingPassPdf(selectedBoleto);
     } catch (error) {
       console.error(error);
-      alert("No se pudo descargar el boleto visual en PDF");
+      alert(localized("No se pudo descargar el boleto visual en PDF"));
     } finally {
       setUpdating(false);
     }

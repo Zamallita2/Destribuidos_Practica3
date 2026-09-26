@@ -3,8 +3,10 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"airres-api/db"
@@ -17,6 +19,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+var flightCreationMu sync.Mutex
 
 // GetAllVuelos keeps the legacy array response for booking screens. The
 // catalog view adds a total so the management screen can page through the
@@ -274,6 +278,8 @@ func CreateVuelo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "El vuelo nuevo debe salir en el futuro"})
 		return
 	}
+	flightCreationMu.Lock()
+	defer flightCreationMu.Unlock()
 	err = dbConn.Transaction(func(tx *gorm.DB) error {
 		var plane models.Avion
 		if err := tx.First(&plane, nVuelo.IDAvion).Error; err != nil {
@@ -296,6 +302,18 @@ func CreateVuelo(c *gin.Context) {
 			nVuelo.IDPuerta = gate.ID
 		}
 		nVuelo.LlegadaProgramada = nVuelo.SalidaProgramada + duration
+		for _, conn := range []*gorm.DB{db.PGAmerica, db.PGEuropaAsia} {
+			if !db.IsAvailable(conn) {
+				return fmt.Errorf("no se puede comprobar la disponibilidad del avión en todos los nodos")
+			}
+			var count int64
+			if err := conn.Model(&models.Vuelo{}).Where("id_avion = ? AND id_estado_vuelo <> ? AND salida_programada < ? AND llegada_programada > ?", nVuelo.IDAvion, 7, nVuelo.LlegadaProgramada, nVuelo.SalidaProgramada).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return fmt.Errorf("el avión ya tiene un vuelo durante ese horario")
+			}
+		}
 		nVuelo.FechaSalida = nVuelo.SalidaProgramada
 		nVuelo.FechaLlegada = nVuelo.LlegadaProgramada
 		nVuelo.IDEstadoVuelo = 1

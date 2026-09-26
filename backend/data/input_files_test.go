@@ -62,8 +62,8 @@ func TestMatrixGridAndValidationRejectMissingCell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	times := TimeGrid(grid)
-	if times["ATL"]["DFW"] != 5 {
+	times := grid
+	if times["ATL"]["DFW"] == nil || *times["ATL"]["DFW"] != 5 {
 		t.Fatalf("unexpected time: %v", times)
 	}
 	eco := 100.0
@@ -96,5 +96,23 @@ func TestMatrixExcelAllowsBlankTrailingFare(t *testing.T) {
 	}
 	if grid["ATL"]["DFW"] != nil || grid["DFW"]["DFW"] != nil {
 		t.Fatalf("trailing blanks not preserved: %v", grid)
+	}
+}
+
+func TestMatrixGridInvalidCellsBecomeNullAndFarePrecisionIsLimited(t *testing.T) {
+	grid, err := MatrixGrid([]byte(",ATL,DFW,LAX,TYO\nATL,12.34,12.345,unknown,12.340\n"), "fare.csv", "economy_fares")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grid["ATL"]["ATL"] == nil || *grid["ATL"]["ATL"] != 12.34 || grid["ATL"]["DFW"] != nil || grid["ATL"]["LAX"] != nil || grid["ATL"]["TYO"] != nil {
+		t.Fatalf("unexpected fares: %v", grid)
+	}
+	jsonGrid, err := MatrixGrid([]byte(`{"ATL":{"DFW":12.345,"LAX":"bad"}}`), "fare.json", "economy_fares")
+	if err != nil || jsonGrid["ATL"]["DFW"] != nil || jsonGrid["ATL"]["LAX"] != nil {
+		t.Fatalf("unexpected JSON fares: %v, %v", jsonGrid, err)
+	}
+	combined, err := MatrixFromJSON([]byte(`{"airports":["ATL","DFW"],"travel_time":{"ATL":{"ATL":null,"DFW":"bad"},"DFW":{"ATL":2,"DFW":null}},"economy_fares":{"ATL":{"ATL":null,"DFW":12.345},"DFW":{"ATL":20,"DFW":null}},"first_class_fares":{"ATL":{"ATL":null,"DFW":50},"DFW":{"ATL":null,"DFW":null}}}`))
+	if err != nil || combined.TravelTime["ATL"]["DFW"] != nil || combined.EconomyFares["ATL"]["DFW"] != nil {
+		t.Fatalf("unexpected combined matrix: %v, %v", combined, err)
 	}
 }

@@ -110,20 +110,76 @@ func DatasetCSV(content []byte, filename string) ([]byte, int, error) {
 }
 
 func MatrixFromJSON(content []byte) (MatricesJSON, error) {
+	var raw struct {
+		Airports        []string        `json:"airports"`
+		TravelTime      json.RawMessage `json:"travel_time"`
+		EconomyFares    json.RawMessage `json:"economy_fares"`
+		FirstClassFares json.RawMessage `json:"first_class_fares"`
+	}
 	var matrix MatricesJSON
-	if err := json.Unmarshal(content, &matrix); err != nil {
+	if err := json.Unmarshal(content, &raw); err != nil {
 		return matrix, fmt.Errorf("JSON de matrices inválido: %w", err)
+	}
+	matrix.Airports = raw.Airports
+	var err error
+	if matrix.TravelTime, err = parseJSONGrid(raw.TravelTime, "travel_time"); err != nil {
+		return matrix, err
+	}
+	if matrix.EconomyFares, err = parseJSONGrid(raw.EconomyFares, "economy_fares"); err != nil {
+		return matrix, err
+	}
+	if matrix.FirstClassFares, err = parseJSONGrid(raw.FirstClassFares, "first_class_fares"); err != nil {
+		return matrix, err
 	}
 	return matrix, ValidateMatrices(matrix)
 }
 
+func parseJSONGrid(content []byte, kind string) (map[string]map[string]*float64, error) {
+	var raw map[string]map[string]json.RawMessage
+	if err := json.Unmarshal(content, &raw); err != nil {
+		return nil, fmt.Errorf("JSON de matriz inválido: %w", err)
+	}
+	grid := make(map[string]map[string]*float64, len(raw))
+	for origin, row := range raw {
+		grid[origin] = make(map[string]*float64, len(row))
+		for dest, cell := range row {
+			var value any
+			decoder := json.NewDecoder(bytes.NewReader(cell))
+			decoder.UseNumber()
+			if err := decoder.Decode(&value); err != nil {
+				return nil, err
+			}
+			if parsed, ok := matrixValue(fmt.Sprint(value), kind); ok {
+				grid[origin][dest] = &parsed
+			} else {
+				grid[origin][dest] = nil
+			}
+		}
+	}
+	return grid, nil
+}
+
+func matrixValue(raw, kind string) (float64, bool) {
+	raw = strings.TrimSpace(raw)
+	if kind != "travel_time" {
+		mantissa := strings.SplitN(strings.ToLower(raw), "e", 2)[0]
+		if parts := strings.SplitN(mantissa, ".", 2); len(parts) == 2 && len(parts[1]) > 2 {
+			return 0, false
+		}
+	}
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+		return 0, false
+	}
+	if kind != "travel_time" && math.Abs(value*100-math.Round(value*100)) > 1e-7 {
+		return 0, false
+	}
+	return value, true
+}
+
 func MatrixGrid(content []byte, filename string, kind string) (map[string]map[string]*float64, error) {
 	if strings.EqualFold(filepath.Ext(filename), ".json") {
-		var grid map[string]map[string]*float64
-		if err := json.Unmarshal(content, &grid); err != nil {
-			return nil, fmt.Errorf("JSON de matriz inválido: %w", err)
-		}
-		return grid, nil
+		return parseJSONGrid(content, kind)
 	}
 	rows, err := rowsForFile(content, filename)
 	if err != nil {
@@ -156,11 +212,11 @@ func MatrixGrid(content []byte, filename string, kind string) (map[string]map[st
 				result[origin][dest] = nil
 				continue
 			}
-			value, err := strconv.ParseFloat(raw, 64)
-			if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
-				return nil, fmt.Errorf("celda %s→%s: se esperaba número no negativo o vacío", origin, dest)
+			if value, ok := matrixValue(raw, kind); ok {
+				result[origin][dest] = &value
+			} else {
+				result[origin][dest] = nil
 			}
-			result[origin][dest] = &value
 		}
 	}
 	return result, nil
@@ -181,7 +237,7 @@ func ValidateMatrices(matrix MatricesJSON) error {
 		name string
 		grid map[string]map[string]*float64
 	}{
-		{"tiempos", timePointers(matrix.TravelTime)},
+		{"tiempos", matrix.TravelTime},
 		{"turista", matrix.EconomyFares},
 		{"primera clase", matrix.FirstClassFares},
 	} {
@@ -202,33 +258,6 @@ func ValidateMatrices(matrix MatricesJSON) error {
 		}
 	}
 	return nil
-}
-
-func timePointers(times map[string]map[string]float64) map[string]map[string]*float64 {
-	result := make(map[string]map[string]*float64, len(times))
-	for from, row := range times {
-		result[from] = make(map[string]*float64, len(row))
-		for to, value := range row {
-			v := value
-			result[from][to] = &v
-		}
-	}
-	return result
-}
-
-func TimeGrid(grid map[string]map[string]*float64) map[string]map[string]float64 {
-	result := make(map[string]map[string]float64, len(grid))
-	for from, row := range grid {
-		result[from] = make(map[string]float64, len(row))
-		for to, value := range row {
-			if value != nil {
-				result[from][to] = *value
-			} else {
-				result[from][to] = 0
-			}
-		}
-	}
-	return result
 }
 
 func ReadLimited(reader io.Reader, limit int64) ([]byte, error) {

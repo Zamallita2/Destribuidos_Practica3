@@ -18,7 +18,7 @@ const integer = (value: number) => value.toLocaleString("es-BO");
 const money = (value: number) => `$${Math.round(value).toLocaleString("es-BO")}`;
 
 export default function Dashboard() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [departures, setDepartures] = useState<Departure[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
@@ -99,7 +99,7 @@ export default function Dashboard() {
             {!loading && departures.length === 0 && <p className="py-10 text-center text-gray-400">No hay salidas futuras. Los vuelos históricos están en el catálogo.</p>}
             {departures.map(({ flight, origin, destination, available }) => <div key={flight.id} className="grid gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-center">
               <div><p className="text-xs text-gray-400">Vuelo AP {flight.id}</p><p className="font-semibold text-white">{origin?.codigo || "?"} → {destination?.codigo || "?"}</p><p className="text-xs text-gray-400">{origin?.pais || "Origen"} → {destination?.pais || "Destino"}</p></div>
-              <div className="text-sm text-gray-200"><p><span className="text-gray-400">Sale:</span> {formatFlightLocalTime(flight.salida_programada, origin?.time_zone || "UTC")}</p><p><span className="text-gray-400">Llega:</span> {formatFlightLocalTime(flight.llegada_programada, destination?.time_zone || "UTC")}</p></div>
+              <div className="text-sm text-gray-200"><p><span className="text-gray-400">Sale:</span> {formatFlightLocalTime(flight.salida_programada, origin?.time_zone || "UTC", language)}</p><p><span className="text-gray-400">Llega:</span> {formatFlightLocalTime(flight.llegada_programada, destination?.time_zone || "UTC", language)}</p></div>
               <div className="text-sm lg:text-right"><p className="font-medium text-blue-200"><Armchair className="mr-1 inline h-4 w-4" aria-hidden="true" />{available === null ? "Cupos sin consultar" : `${integer(available)} asientos disponibles`}</p><p className="text-gray-400">{stateNames[flight.id_estado_vuelo] || "Sin estado"}</p></div>
             </div>)}
           </div>

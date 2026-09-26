@@ -6,6 +6,8 @@ import dynamic from "next/dynamic";
 import { formatFlightLocalTime } from "@/lib/flightTime";
 import { PURCHASE_CAPITALS } from "@/data/capitals";
 import QRNetworkInfo from "@/components/QRNetworkInfo";
+import { translateUiText } from "@/lib/englishUi";
+import { useLanguage } from "@/context/LanguageContext";
 
 const PlaneModelViewer = dynamic(() => import("@/components/PlaneModelViewer"), { 
   ssr: false,
@@ -17,6 +19,8 @@ const PlaneModelViewer = dynamic(() => import("@/components/PlaneModelViewer"), 
 });
 
 export default function Boletos() {
+  const { language } = useLanguage();
+  const localized = (message: string) => language === "en" ? translateUiText(message) : message;
   const [ciudades, setCiudades] = useState([]);
   const [aviones, setAviones] = useState<{ id: number; nombre: string }[]>([]);
   const [vuelos, setVuelos] = useState([]);
@@ -204,7 +208,7 @@ export default function Boletos() {
       await downloadBoardingPassPdf({ id_boleto: ticketID, estado: "SALED" });
     } catch (error) {
       console.error(error);
-      alert(`El boleto #${ticketID} quedó registrado, pero no se descargó el PDF. Puedes intentarlo de nuevo desde Gestión de Boletos.`);
+      alert(localized(`El boleto #${ticketID} quedó registrado, pero no se descargó el PDF. Puedes intentarlo de nuevo desde Gestión de Boletos.`));
     } finally {
       setPdfDownloading(false);
     }
@@ -212,12 +216,12 @@ export default function Boletos() {
 
   const procesarBoleto = async (nuevoEstado: string) => {
     if (selectedVuelo && ![1, 8].includes(selectedVuelo.id_estado_vuelo)) {
-      alert("⚠️ Este vuelo ya no admite reservas ni compras.");
+      alert(localized("⚠️ Este vuelo ya no admite reservas ni compras."));
       return;
     }
 
     if (!passenger.nombre || !passenger.email || !passenger.pasaporte) {
-      alert("⚠️ Por favor completa todos los datos del pasajero antes de continuar.");
+      alert(localized("⚠️ Por favor completa todos los datos del pasajero antes de continuar."));
       return;
     }
 
@@ -248,12 +252,12 @@ export default function Boletos() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        alert(`⚠️ ${errData.error || "Error al procesar la reserva/compra"}`);
+        alert(localized(`⚠️ ${errData.error || "Error al procesar la reserva/compra"}`));
       } else {
         const ticket = await res.json();
         setLastWrite({ ticketID: ticket.id_boleto, node: res.headers.get("X-Write-Node") || "" });
         if (ticket.replication_pending) {
-          alert("El boleto quedó guardado, pero la confirmación de réplica está pendiente. Consulta su estado en Gestión de Boletos.");
+          alert(localized("El boleto quedó guardado, pero la confirmación de réplica está pendiente. Consulta su estado en Gestión de Boletos."));
         }
         if (nuevoEstado === "SALED") {
           try {
@@ -264,7 +268,7 @@ export default function Boletos() {
             await downloadVisualTicket(ticket.id_boleto);
           } catch (passError) {
             console.error(passError);
-            alert(`La compra del boleto #${ticket.id_boleto} quedó registrada, pero el pase no se pudo mostrar. Puedes consultarlo en Gestión de Boletos.`);
+            alert(localized(`La compra del boleto #${ticket.id_boleto} quedó registrada, pero el pase no se pudo mostrar. Puedes consultarlo en Gestión de Boletos.`));
           }
         }
         // Refresh seats
@@ -273,7 +277,7 @@ export default function Boletos() {
       }
     } catch(e) {
       console.error(e);
-      alert("⚠️ No se pudo completar la solicitud. Revisa la conexión e inténtalo de nuevo.");
+      alert(localized("⚠️ No se pudo completar la solicitud. Revisa la conexión e inténtalo de nuevo."));
     } finally {
       setBookingLoading(false);
     }
@@ -290,8 +294,8 @@ export default function Boletos() {
         <div>
           <h3 className="text-xl font-bold text-emerald-300">Compra confirmada · Pase de abordar #{purchasedPass.id_boleto}</h3>
           <p>{purchasedPass.pasajero} · Vuelo AP-{purchasedPass.vuelo} · Asiento {purchasedPass.asiento}</p>
-          <p className="text-sm text-gray-400">Sale de {purchasedPass.origen} (hora local): {formatFlightLocalTime(Math.floor(new Date(purchasedPass.salida_local).getTime() / 1000), purchasedPass.zona_salida)}</p>
-          <p className="text-sm text-gray-400">Llega a {purchasedPass.destino} (hora local): {formatFlightLocalTime(Math.floor(new Date(purchasedPass.llegada_local).getTime() / 1000), purchasedPass.zona_llegada)}</p>
+          <p className="text-sm text-gray-400">Sale de {purchasedPass.origen} (hora local): {formatFlightLocalTime(Math.floor(new Date(purchasedPass.salida_local).getTime() / 1000), purchasedPass.zona_salida, language)}</p>
+          <p className="text-sm text-gray-400">Llega a {purchasedPass.destino} (hora local): {formatFlightLocalTime(Math.floor(new Date(purchasedPass.llegada_local).getTime() / 1000), purchasedPass.zona_llegada, language)}</p>
           <p className="text-xs text-gray-400">El boleto visual se descarga como PDF. Puedes volver a obtenerlo desde Gestión de Boletos.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={() => downloadVisualTicket(purchasedPass.id_boleto)} disabled={pdfDownloading} className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{pdfDownloading ? "Descargando PDF..." : "Descargar boleto visual (PDF)"}</button>
@@ -417,14 +421,14 @@ export default function Boletos() {
                 <div className="flex items-center justify-between text-sm">
                    <div>
                       <p className="text-gray-400 font-medium">Sale · hora local {(ciudades.find((c:any) => c.id === v.id_origen) as any)?.codigo}</p>
-                      <p className="text-white font-bold">{formatFlightLocalTime(v.salida_programada, (ciudades.find((c:any) => c.id === v.id_origen) as any)?.time_zone)}</p>
+                      <p className="text-white font-bold">{formatFlightLocalTime(v.salida_programada, (ciudades.find((c:any) => c.id === v.id_origen) as any)?.time_zone, language)}</p>
                    </div>
                    <div className="h-px bg-white/20 flex-1 mx-4 relative">
                       <div className="absolute -top-1 right-0 w-2 h-2 rounded-full bg-blue-500" />
                    </div>
                    <div className="text-right">
                       <p className="text-gray-400 font-medium">Llega · hora local {(ciudades.find((c:any) => c.id === v.id_destino) as any)?.codigo}</p>
-                      <p className="text-white font-bold">{formatFlightLocalTime(v.llegada_programada, (ciudades.find((c:any) => c.id === v.id_destino) as any)?.time_zone)}</p>
+                      <p className="text-white font-bold">{formatFlightLocalTime(v.llegada_programada, (ciudades.find((c:any) => c.id === v.id_destino) as any)?.time_zone, language)}</p>
                    </div>
                 </div>
               </div>

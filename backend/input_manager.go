@@ -149,7 +149,7 @@ func previewInputs(c *gin.Context) {
 		}
 		switch field {
 		case "travel_time":
-			matrix.TravelTime = data.TimeGrid(grid)
+			matrix.TravelTime = grid
 		case "economy_fares":
 			matrix.EconomyFares = grid
 		case "first_class_fares":
@@ -259,7 +259,8 @@ func previewDataset(content []byte, matrix data.MatricesJSON, planes map[uint]bo
 	if _, err := r.Read(); err != nil {
 		return 0, 0, 0, err
 	}
-	rows, eligible, rejected := 0, 0, 0
+	rows, rejected := 0, 0
+	candidates := []models.Vuelo{}
 	for {
 		row, err := r.Read()
 		if err == io.EOF {
@@ -274,20 +275,21 @@ func previewDataset(content []byte, matrix data.MatricesJSON, planes map[uint]bo
 			continue
 		}
 		origin, dest := strings.ToUpper(strings.TrimSpace(row[2])), strings.ToUpper(strings.TrimSpace(row[3]))
-		allowed, _, _, _ := matrix.RouteAvailability(origin, dest)
+		allowed, _, _, hours := matrix.RouteAvailability(origin, dest)
 		plane, planeErr := strconv.Atoi(strings.TrimSpace(row[4]))
 		dateTime := strings.TrimSpace(row[0]) + " " + strings.TrimSpace(row[1])
-		_, dateErr := time.ParseInLocation("01/02/06 15:04", dateTime, time.UTC)
+		departure, dateErr := time.ParseInLocation("01/02/06 15:04", dateTime, time.UTC)
 		if dateErr != nil {
-			_, dateErr = time.ParseInLocation("01/02/06 3:04", dateTime, time.UTC)
+			departure, dateErr = time.ParseInLocation("01/02/06 3:04", dateTime, time.UTC)
 		}
 		if allowed && planeErr == nil && plane > 0 && planes[uint(plane)] && dateErr == nil {
-			eligible++
+			candidates = append(candidates, models.Vuelo{IDAvion: uint(plane), SalidaProgramada: departure.Unix(), LlegadaProgramada: departure.Unix() + int64(hours*3600)})
 		} else {
 			rejected++
 		}
 	}
-	return rows, eligible, rejected, nil
+	accepted, conflicts := data.FilterAircraftOverlaps(candidates)
+	return rows, len(accepted), rejected + len(conflicts), nil
 }
 
 func getInputJob(c *gin.Context) {
@@ -367,7 +369,7 @@ func verifyRelationalMatrices(path string) error {
 			return fmt.Errorf("tiempos de %s: %w", name, err)
 		}
 		var economy, first map[string]map[string]*float64
-		var times map[string]map[string]float64
+		var times map[string]map[string]*float64
 		if err := json.Unmarshal(prices.MatrizPreciosRegular, &economy); err != nil {
 			return err
 		}

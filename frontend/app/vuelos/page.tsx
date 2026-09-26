@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Ticket, Info, Loader2, ArrowRight, X, Search } from "lucide-react";
 import { formatFlightLocalTime } from "@/lib/flightTime";
+import { useLanguage } from "@/context/LanguageContext";
 
 const flightStates: Record<number, string> = {
   1: "Programado", 2: "Embarcando", 3: "Despegó",
@@ -11,6 +12,7 @@ const flightStates: Record<number, string> = {
 };
 
 export default function Vuelos() {
+  const { language } = useLanguage();
   const [vuelos, setVuelos] = useState<any[]>([]);
   const [totalVuelos, setTotalVuelos] = useState(0);
   const [catalogCounts, setCatalogCounts] = useState({ imported: 0, demo: 0 });
@@ -90,7 +92,7 @@ export default function Vuelos() {
   const toDate = (epoch: number, cityID: number) => {
     if(!epoch) return "N/A";
     const city = ciudades.find((c: any) => c.id === cityID);
-    return formatFlightLocalTime(epoch, city?.time_zone || "UTC");
+    return formatFlightLocalTime(epoch, city?.time_zone || "UTC", language);
   }
 
   const changeState = async (id: number, nextStateId: number) => {

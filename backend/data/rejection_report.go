@@ -77,7 +77,7 @@ func GenerateRejectedCSV(sourcePath, matrixPath, outputPath string) (int, error)
 			if (economy == nil || *economy <= 0) && (first == nil || *first <= 0) {
 				reason = "Sin precio en Primera Clase ni Clase Turista para esta dirección"
 			}
-			if matrix.TravelTime[origin][dest] <= 0 && reason == "" {
+			if (matrix.TravelTime[origin][dest] == nil || *matrix.TravelTime[origin][dest] <= 0) && reason == "" {
 				reason = "Sin duración positiva en la matriz para esta dirección"
 			}
 		}

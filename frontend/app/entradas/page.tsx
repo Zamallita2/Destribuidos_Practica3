@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, DatabaseZap, FileSpreadsheet, Loader2, UploadCloud, AlertTriangle } from "lucide-react";
+import { translateUiText } from "@/lib/englishUi";
+import { useLanguage } from "@/context/LanguageContext";
 
 type FileKey = "dataset" | "matrices" | "travel_time" | "economy_fares" | "first_class_fares";
 type InputJob = {
@@ -28,6 +30,7 @@ const fields: { key: FileKey; title: string; help: string; accept: string }[] = 
 ];
 
 export default function EntradasPage() {
+  const { language } = useLanguage();
   const [files, setFiles] = useState<Partial<Record<FileKey, File>>>({});
   const [current, setCurrent] = useState<CurrentInputs | null>(null);
   const [job, setJob] = useState<InputJob | null>(null);
@@ -87,7 +90,8 @@ export default function EntradasPage() {
 
   async function process() {
     if (!job || job.state !== "preview") return;
-    if (!window.confirm("Esto borrará todos los vuelos, boletos y reservas anteriores y los reemplazará usando los archivos seleccionados. ¿Continuar?")) return;
+    const warning = "Esto borrará todos los vuelos, boletos y reservas anteriores y los reemplazará usando los archivos seleccionados. ¿Continuar?";
+    if (!window.confirm(language === "en" ? translateUiText(warning) : warning)) return;
     setError("");
     setBusy(true);
     try {

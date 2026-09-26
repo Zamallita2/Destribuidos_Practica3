@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatFlightLocalTime } from "@/lib/flightTime";
+import { useLanguage } from "@/context/LanguageContext";
 
 type Stats = {
   capacidad: number;
@@ -15,6 +16,7 @@ type Stats = {
 };
 
 export default function FlightDashboard() {
+  const { language } = useLanguage();
   const params = useParams();
   const id = String(params.id);
   const [flight, setFlight] = useState<any>(null);
@@ -61,8 +63,8 @@ export default function FlightDashboard() {
       <div>
         <h1 className="text-3xl font-bold">Panel del vuelo AP {id}</h1>
         <p className="text-gray-400">{origin} → {destination} · Estado {flight.id_estado_vuelo}</p>
-        <p className="text-gray-400">Sale de {origin} (hora local): {formatFlightLocalTime(flight.salida_programada, originCity?.time_zone || "UTC")}</p>
-        <p className="text-gray-400">Llega a {destination} (hora local): {formatFlightLocalTime(flight.llegada_programada, destinationCity?.time_zone || "UTC")}</p>
+        <p className="text-gray-400">Sale de {origin} (hora local): {formatFlightLocalTime(flight.salida_programada, originCity?.time_zone || "UTC", language)}</p>
+        <p className="text-gray-400">Llega a {destination} (hora local): {formatFlightLocalTime(flight.llegada_programada, destinationCity?.time_zone || "UTC", language)}</p>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {cards.map(([label, value]) => (

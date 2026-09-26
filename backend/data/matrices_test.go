@@ -14,9 +14,9 @@ func TestRouteAvailabilityAllowsEitherClassAndKeepsDirection(t *testing.T) {
 			"ATL": {"LAX": nil, "PAR": &first},
 			"LAX": {"ATL": nil},
 		},
-		TravelTime: map[string]map[string]float64{
-			"ATL": {"LAX": 5, "PAR": 9},
-			"LAX": {"ATL": 5},
+		TravelTime: map[string]map[string]*float64{
+			"ATL": {"LAX": ptr(5), "PAR": ptr(9)},
+			"LAX": {"ATL": ptr(5)},
 		},
 	}
 	tests := []struct {
@@ -35,3 +35,5 @@ func TestRouteAvailabilityAllowsEitherClassAndKeepsDirection(t *testing.T) {
 		}
 	}
 }
+
+func ptr(value float64) *float64 { return &value }
