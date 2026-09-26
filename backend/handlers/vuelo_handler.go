@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -282,6 +283,18 @@ func CreateVuelo(c *gin.Context) {
 		duration, err := services.DurationForFlight(tx, &nVuelo)
 		if err != nil {
 			return err
+		}
+		nVuelo.LlegadaProgramada = nVuelo.SalidaProgramada + duration
+
+		// Validar que el avión no tenga un vuelo en curso/solapado en el mismo rango de tiempo
+		var existingCount int64
+		if err := tx.Model(&models.Vuelo{}).
+			Where("id_avion = ? AND salida_programada < ? AND llegada_programada > ?", nVuelo.IDAvion, nVuelo.LlegadaProgramada, nVuelo.SalidaProgramada).
+			Count(&existingCount).Error; err != nil {
+			return err
+		}
+		if existingCount > 0 {
+			return errors.New("El avión seleccionado ya tiene otro vuelo programado en ese rango de tiempo")
 		}
 		_, economyErr := services.FareForFlight(tx, &nVuelo, "REGULAR")
 		_, firstErr := services.FareForFlight(tx, &nVuelo, "VIP")

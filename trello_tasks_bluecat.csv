@@ -1,0 +1,29 @@
+Name,Description,List,Labels,Members,Start Date,Due Date
+Diseño del Esquema de BD Distribuida,Modelado de PostgreSQL para nodos América y Europa/Asia junto con base de datos MongoDB para lecturas rápidas,Done,"Backend,DB",Persona 1,2026-09-11,2026-09-13
+Configuración de Replicación Asíncrona,"Sincronización mediante Sync Outbox, eventos y réplicas entre nodos relacionales",Done,"Backend,DB",Persona 2,2026-09-11,2026-09-14
+Relojes Lógicos para Consistencia,Implementación de Lamport Clocks y Vector Clocks para ordenar eventos distribuidos,Done,Backend,Persona 3,2026-09-12,2026-09-15
+Generación de Pases de Abordar,Módulo de pases de abordar en formato Apple Wallet (.pkpass) y Google Wallet JWT,Done,"Backend,Feature",Persona 4,2026-09-12,2026-09-16
+API Rest con Gin Framework,"Desarrollo de endpoints RESTful en Go para vuelos, boletos, ciudades y matrices",Done,Backend,Persona 5,2026-09-13,2026-09-17
+Módulo de Importación de Datasets,"Soporte para cargar matrices de precios, tiempos y vuelos en JSON, CSV y XLSX",Done,"Backend,Files",Persona 6,2026-09-13,2026-09-18
+Algoritmo TSP (Agente Viajero),Implementación de optimización de rutas multiciudad aplicando el problema del viajante,Done,Algoritmos,Persona 1,2026-09-14,2026-09-19
+Sugerencia de Rutas y Escalas,Motor de búsqueda de conexiones directas y combinaciones con escalas óptimas,Done,Algoritmos,Persona 2,2026-09-14,2026-09-20
+Script de Generación de Vuelos,Script automatizado de simulación con ocupación configurable de asientos,Done,"DevOps,Scripts",Persona 3,2026-09-15,2026-09-20
+Rediseño UI/UX Frontend,"Interfaz moderna responsiva construida con Next.js, React y Tailwind CSS",Done,Frontend,Persona 4,2026-09-15,2026-09-21
+Reserva de Asientos en Tiempo Real,Control de concurrencia y reserva/compra de asientos por clase de vuelo,Done,"Frontend,Backend",Persona 5,2026-09-16,2026-09-22
+Gestión de Devoluciones y Cancelación,Proceso diferido de devoluciones con ventana configurable en minutos,Done,Backend,Persona 6,2026-09-16,2026-09-22
+Diagnóstico de Continuidad de Vuelos,Detección de discontinuidades de aeronaves y reporte de vuelos rechazados,Done,"Backend,QA",Persona 1,2026-09-17,2026-09-23
+Internacionalización (i18n),Soporte multi-idioma completo (Español e Inglés) en la aplicación web,Done,Frontend,Persona 2,2026-09-17,2026-09-23
+Validación de Solapamiento por Avión,Control estricto para evitar que un avión tenga vuelos colisionados en el mismo horario,Done,"Backend,Validation",Persona 3,2026-09-18,2026-09-24
+Limpieza de Matrices y Decimales,Conversión de valores inválidos a null y redondeo estricto de tarifas a 2 decimales,Done,"Backend,Validation",Persona 4,2026-09-18,2026-09-24
+Contenerización Docker Compose,"Orquestación de servicios PostgreSQL, MongoDB y API Go mediante Docker Compose",Done,DevOps,Persona 5,2026-09-19,2026-09-25
+Mantenimiento de Catálogo de Aeropuertos,Sincronización de catálogo JSON de 15 aeropuertos principales con zonas horarias y regiones,Done,"Backend,DB",Persona 6,2026-09-19,2026-09-25
+Simulación de Latencia de Red,Módulo de monitoreo e inspección de latencia entre nodos regionales,Done,"DevOps,QA",Persona 1,2026-09-20,2026-09-25
+Visualización de Mapas de Vuelo,Integración de componentes de mapas y gráficos interactivos para rutas de vuelo,Done,Frontend,Persona 2,2026-09-20,2026-09-25
+Manejo de Errores y Validaciones Formulario,Validaciones de entrada en formularios de compra y carga de matrices en frontend,Done,"Frontend,Validation",Persona 3,2026-09-21,2026-09-25
+Monitoreo de Sincronización en Vivo,Panel de estado de outbox y salud de réplica de bases de datos,Done,"Frontend,DevOps",Persona 4,2026-09-21,2026-09-25
+Exportación de Reportes de Errores,Generación automática de reportes CSV de rechazo de vuelos e inconsistencias,Done,"Backend,Files",Persona 5,2026-09-22,2026-09-25
+Optimización de Carga Paginada de Vuelos,Implementación de paginación y filtrado por offset/limit en catálogo de vuelos,Done,"Backend,Frontend",Persona 6,2026-09-22,2026-09-25
+Documentación del Proyecto y README,"Elaboración de manuales de uso, guía de ejemplos e instrucciones de ejecución Docker",Done,Docs,Persona 1,2026-09-23,2026-09-25
+Diseño de Matrices de Prueba (15 Aeropuertos),"Creación de conjuntos completos de prueba para tiempos y tarifas en formatos CSV, JSON y XLSX",Done,"Files,QA",Persona 2,2026-09-23,2026-09-25
+Pruebas Unitarias e Integración Backend,"Batería de pruebas automatizadas para servicios de reserva, réplicas e importación",Done,"QA,Backend",Persona 3,2026-09-24,2026-09-25
+Pruebas de Compilación y Deploy Frontend,Verificación de compilación de producción con Next.js build sin errores de tipos,Done,"QA,Frontend",Persona 4,2026-09-24,2026-09-25

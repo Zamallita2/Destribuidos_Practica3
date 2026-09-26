@@ -278,17 +278,23 @@ func ImportFlightsFromCSV(dbConn *gorm.DB, csvPath, matrixPath, ownerRegion stri
 		}
 		vuelos = append(vuelos, vuelo)
 	}
-
-	// Rule 1: Set future flights to SCHEDULED (estado ID = 1)
+	// Asignar estado según fecha actual (Rule 1 & 7)
 	now := time.Now().Unix()
 	for i := range vuelos {
-		if vuelos[i].SalidaProgramada > now {
-			vuelos[i].IDEstadoVuelo = 1
+		// Mantener CANCELLED (7) o DELAYED (8) si venían así en el CSV
+		if vuelos[i].IDEstadoVuelo == 7 || vuelos[i].IDEstadoVuelo == 8 {
+			continue
+		}
+		if vuelos[i].LlegadaProgramada < now {
+			vuelos[i].IDEstadoVuelo = 5 // LANDED / ATERRIZADO
+		} else if vuelos[i].SalidaProgramada <= now && now <= vuelos[i].LlegadaProgramada {
+			vuelos[i].IDEstadoVuelo = 4 // IN_FLIGHT / EN VUELO
+		} else {
+			vuelos[i].IDEstadoVuelo = 1 // SCHEDULED / PROGRAMADO
 		}
 	}
 
-	// Keep valid route data while recording discontinuities separately.
-	// Sort flights by aircraft ID, then by scheduled departure time
+	// Ordenar vuelos por avión y luego por fecha de salida para validar solapamiento de avión (Rule 2 & 6)
 	sort.Slice(vuelos, func(i, j int) bool {
 		if vuelos[i].IDAvion == vuelos[j].IDAvion {
 			return vuelos[i].SalidaProgramada < vuelos[j].SalidaProgramada
@@ -297,18 +303,35 @@ func ImportFlightsFromCSV(dbConn *gorm.DB, csvPath, matrixPath, ownerRegion stri
 	})
 
 	var validVuelos []models.Vuelo
+	// Mapa de intervalos ocupados por avión: IDAvion -> lista de vuelos aceptados
+	planeIntervals := make(map[uint][]models.Vuelo)
 
 	for _, v := range vuelos {
-		// Rule 2 is temporarily disabled as requested by user.
-		// We append all flights to validVuelos without checking lastDest.
+		hasOverlap := false
+		if existingList, exists := planeIntervals[v.IDAvion]; exists {
+			for _, prev := range existingList {
+				// Solapamiento si los intervalos [Salida, Llegada] chocan
+				if v.SalidaProgramada < prev.LlegadaProgramada && v.LlegadaProgramada > prev.SalidaProgramada {
+					hasOverlap = true
+					break
+				}
+			}
+		}
+		if hasOverlap {
+			skipped++
+			if logFile != nil {
+				logFile.WriteString(fmt.Sprintf("RECHAZADO: Vuelo ID %d Avión %d | Motivo: El avión tiene otro vuelo solapado en el mismo rango de tiempo (%d - %d)\n", v.ID, v.IDAvion, v.SalidaProgramada, v.LlegadaProgramada))
+			}
+			continue
+		}
+		planeIntervals[v.IDAvion] = append(planeIntervals[v.IDAvion], v)
 		validVuelos = append(validVuelos, v)
 	}
 
 	vuelos = validVuelos
-	log.Printf("[Seed Flights] Continuity does not reject CSV flights; run the diagnostic endpoint for anomalies.")
 
 	if logFile != nil {
-		logFile.WriteString(fmt.Sprintf("\n--- RESUMEN FINAL ---\n%d filas nuevas con al menos una clase tarifada. Discontinuidades: diagnóstico separado.\n", len(vuelos)))
+		logFile.WriteString(fmt.Sprintf("\n--- RESUMEN FINAL ---\n%d filas válidas importadas.\n", len(vuelos)))
 	}
 	log.Printf("[Seed Flights] Dataset loaded. Starting import of %d valid flights.", len(vuelos))
 
@@ -329,28 +352,6 @@ func ImportFlightsFromCSV(dbConn *gorm.DB, csvPath, matrixPath, ownerRegion stri
 	}
 
 	log.Printf("[Seed Flights] Successfully imported %d vuelos (%d skipped).", total, skipped)
-	// Repair the one-hour placeholder used by earlier versions, in batches
-	// by directed route. This does not modify flight IDs or ticket references.
-	for from, destinations := range matrices.TravelTime {
-		for to, hours := range destinations {
-			if hours <= 0 {
-				continue
-			}
-			fromID, fromOK := ciudadByCode[from]
-			toID, toOK := ciudadByCode[to]
-			if !fromOK || !toOK {
-				continue
-			}
-			delta := int64(hours * 3600)
-			dbConn.Model(&models.Vuelo{}).
-				Where("id_origen = ? AND id_destino = ? AND llegada_programada <> salida_programada + ?", fromID, toID, delta).
-				Updates(map[string]interface{}{
-					"llegada_programada": gorm.Expr("salida_programada + ?", delta),
-					"fecha_llegada":      gorm.Expr("salida_programada + ?", delta),
-				})
-		}
-	}
-	dbConn.Model(&models.Vuelo{}).Where("salida_programada > ?", time.Now().Unix()).Update("id_estado_vuelo", 1)
 	return total, nil
 }
 

@@ -1,0 +1,19 @@
+[
+  { "name": "Diseño del Esquema de BD Distribuida (PostgreSQL América y Europa/Asia + MongoDB)" },
+  { "name": "Configuración de Replicación Asíncrona y Sync Outbox entre Nodos" },
+  { "name": "Implementación del Reloj Lógico (Lamport & Vector Clocks) para Consistencia" },
+  { "name": "Generación de Pases de Abordar (Apple Wallet PKPass y Google Wallet JWT)" },
+  { "name": "Diseño e Implementación de la API Rest en Go (Gin Framework)" },
+  { "name": "Módulo de Carga y Validación de Datasets/Matrices (JSON, CSV, XLSX)" },
+  { "name": "Algoritmo de Optimización TSP (Agente Viajero) para Rutas Multiciudad" },
+  { "name": "Algoritmo de Sugerencia de Rutas y Conexiones Directas/Escalas" },
+  { "name": "Script de Generación Automática de Vuelos con Distribución de Asientos" },
+  { "name": "Rediseño Completo de Interfaz UI/UX Frontend en Next.js y Tailwind CSS" },
+  { "name": "Sistema de Reserva de Asientos en Tiempo Real y Control de Concurrencia" },
+  { "name": "Gestión y Proceso de Devolución/Cancelación de Boletos con Ventana Configurable" },
+  { "name": "Diagnóstico de Continuidad de Vuelos y Reportes de Rechazos" },
+  { "name": "Internacionalización (i18n Español / Inglés) en Frontend" },
+  { "name": "Validación de Solapamiento de Horarios por Avión y Asignación Dinámica de Estados" },
+  { "name": "Limpieza de Datos de Matrices y Redondeo Estricto de Precios a 2 Decimales" },
+  { "name": "Contenerización del Proyecto con Docker Compose (Multi-nodo)" }
+]

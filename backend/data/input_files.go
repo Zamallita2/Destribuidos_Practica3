@@ -158,8 +158,12 @@ func MatrixGrid(content []byte, filename string, kind string) (map[string]map[st
 			}
 			value, err := strconv.ParseFloat(raw, 64)
 			if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
-				return nil, fmt.Errorf("celda %s→%s: se esperaba número no negativo o vacío", origin, dest)
+				// Datos inválidos se traducen automáticamente a null (Rule 5)
+				result[origin][dest] = nil
+				continue
 			}
+			// Limitar precios a máximo 2 decimales (Rule 4)
+			value = math.Round(value*100) / 100
 			result[origin][dest] = &value
 		}
 	}

@@ -43,5 +43,50 @@
     "inputs": "Datos de entrada",
     "sync": "Sincronización",
     "settings": "Ajustes"
+  },
+  "flights": {
+    "title": "Búsqueda y Catálogo de Vuelos",
+    "subtitle": "Consulta, filtra y reserva vuelos en tiempo real.",
+    "createFlight": "Crear Vuelo",
+    "origin": "Origen",
+    "destination": "Destino",
+    "search": "Buscar",
+    "status": "Estado",
+    "plane": "Avión",
+    "departure": "Salida",
+    "arrival": "Llegada",
+    "actions": "Acciones",
+    "selectSeat": "Seleccionar Asiento"
+  },
+  "tickets": {
+    "title": "Mis Boletos",
+    "subtitle": "Historial de reservas y boletos comprados.",
+    "ticketId": "ID Boleto",
+    "passenger": "Pasajero",
+    "passport": "Pasaporte",
+    "seat": "Asiento",
+    "class": "Clase",
+    "cost": "Costo",
+    "status": "Estado",
+    "actions": "Acciones",
+    "cancel": "Cancelar / Devolver"
+  },
+  "inputs": {
+    "title": "Datos de Entrada y Matrices",
+    "subtitle": "Carga y actualiza las matrices de tiempos, precios y dataset de vuelos.",
+    "uploadButton": "Cargar Archivos",
+    "replaceSuccess": "Datos reemplazados con éxito",
+    "travelTime": "Matriz de Tiempos",
+    "economyFares": "Precios Turista",
+    "firstClassFares": "Precios Primera Clase"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Guardar",
+    "close": "Cerrar"
   }
 }

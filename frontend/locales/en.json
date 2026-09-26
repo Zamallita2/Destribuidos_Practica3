@@ -43,5 +43,50 @@
     "inputs": "Input Data",
     "sync": "Synchronization",
     "settings": "Settings"
+  },
+  "flights": {
+    "title": "Flight Search & Catalog",
+    "subtitle": "Search, filter, and book flights in real time.",
+    "createFlight": "Create Flight",
+    "origin": "Origin",
+    "destination": "Destination",
+    "search": "Search",
+    "status": "Status",
+    "plane": "Aircraft",
+    "departure": "Departure",
+    "arrival": "Arrival",
+    "actions": "Actions",
+    "selectSeat": "Select Seat"
+  },
+  "tickets": {
+    "title": "My Tickets",
+    "subtitle": "Booking history and purchased tickets.",
+    "ticketId": "Ticket ID",
+    "passenger": "Passenger",
+    "passport": "Passport",
+    "seat": "Seat",
+    "class": "Class",
+    "cost": "Cost",
+    "status": "Status",
+    "actions": "Actions",
+    "cancel": "Cancel / Refund"
+  },
+  "inputs": {
+    "title": "Input Data & Matrices",
+    "subtitle": "Upload and update travel time, fare matrices, and flight datasets.",
+    "uploadButton": "Upload Files",
+    "replaceSuccess": "Data replaced successfully",
+    "travelTime": "Travel Time Matrix",
+    "economyFares": "Economy Fares",
+    "firstClassFares": "First Class Fares"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "close": "Close"
   }
 }
