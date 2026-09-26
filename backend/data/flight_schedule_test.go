@@ -31,3 +31,16 @@ func TestFilterAircraftOverlapsAllowsTeleportAfterLanding(t *testing.T) {
 		t.Fatalf("accepted=%v rejected=%v", accepted, rejected)
 	}
 }
+
+func TestFilterAircraftOverlapsKeepsFirstValidCSVRowPerAircraft(t *testing.T) {
+	flights := []models.Vuelo{
+		{ID: 1, IDAvion: 7, IDOrigen: 1, SalidaProgramada: 120, LlegadaProgramada: 240},
+		{ID: 2, IDAvion: 8, IDOrigen: 1, SalidaProgramada: 120, LlegadaProgramada: 240},
+		{ID: 3, IDAvion: 7, IDOrigen: 2, SalidaProgramada: 100, LlegadaProgramada: 180},
+		{ID: 4, IDAvion: 7, IDOrigen: 1, SalidaProgramada: 240, LlegadaProgramada: 300},
+	}
+	accepted, rejected := FilterAircraftOverlaps(flights)
+	if len(accepted) != 3 || accepted[0].ID != 1 || accepted[1].ID != 2 || accepted[2].ID != 4 || len(rejected) != 1 || rejected[0].ID != 3 {
+		t.Fatalf("accepted=%v rejected=%v", accepted, rejected)
+	}
+}

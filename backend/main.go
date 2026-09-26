@@ -52,7 +52,8 @@ func main() {
 	seedAsientos(db.PGEuropaAsia)
 	reconcileLegacyFlights()
 
-	// Seed Flights from CSV dataset (auto-import, skips if already loaded)
+	// Seed flights only when a region has no flights yet. A restart after a CSV
+	// replacement must not restore rows that the replacement intentionally removed.
 	csvPath := data.CSVPath()
 	if csvPath != "" {
 		reportPath := os.Getenv("REJECTED_CSV_PATH")
@@ -64,12 +65,8 @@ func main() {
 		} else {
 			log.Printf("[Import] Rejection report: %s (%d rows)", reportPath, count)
 		}
-		if db.IsAvailable(db.PGAmerica) {
-			data.SeedFlightsFromCSV(db.PGAmerica, csvPath, "America")
-		}
-		if db.IsAvailable(db.PGEuropaAsia) {
-			data.SeedFlightsFromCSV(db.PGEuropaAsia, csvPath, "EuropaAsia")
-		}
+		seedFlightsIfEmpty(db.PGAmerica, csvPath, "America")
+		seedFlightsIfEmpty(db.PGEuropaAsia, csvPath, "EuropaAsia")
 	} else {
 		log.Println("[Seed Flights] WARNING: Dataset CSV not found. Place flights.csv in backend/data/ or dataset/ folder.")
 	}
@@ -136,6 +133,20 @@ func main() {
 
 	log.Println("Starting server on :8080")
 	r.Run(":8080")
+}
+
+func seedFlightsIfEmpty(conn *gorm.DB, csvPath, region string) {
+	if !db.IsAvailable(conn) {
+		return
+	}
+	var count int64
+	if err := conn.Model(&models.Vuelo{}).Count(&count).Error; err != nil {
+		log.Printf("[Seed Flights] Cannot count %s flights: %v", region, err)
+		return
+	}
+	if count == 0 {
+		data.SeedFlightsFromCSV(conn, csvPath, region)
+	}
 }
 
 func seedMongoMatrices() {

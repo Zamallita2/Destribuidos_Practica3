@@ -19,3 +19,13 @@ func TestPreviewDatasetRejectsOverlappingAircraftAcrossOrigins(t *testing.T) {
 		t.Fatalf("rows=%d eligible=%d rejected=%d err=%v", rows, eligible, rejected, err)
 	}
 }
+
+func TestPreviewDatasetAllowsSameDayAndOriginForDifferentAircraft(t *testing.T) {
+	hours, fare := 2.0, 50.0
+	matrix := data.MatricesJSON{TravelTime: map[string]map[string]*float64{"ATL": {"DFW": &hours}}, EconomyFares: map[string]map[string]*float64{"ATL": {"DFW": &fare}}}
+	csv := "flight_date,flight_time,origin,destination,aircraft_id,status,gate\n10/06/26,17:00,ATL,DFW,7,SCHEDULED,G1\n10/06/26,17:30,ATL,DFW,7,SCHEDULED,G1\n10/06/26,17:30,ATL,DFW,18,SCHEDULED,G1\n10/06/26,19:00,ATL,DFW,7,SCHEDULED,G1\n"
+	rows, eligible, rejected, err := previewDataset([]byte(csv), matrix, map[uint]bool{7: true, 18: true})
+	if err != nil || rows != 4 || eligible != 3 || rejected != 1 {
+		t.Fatalf("rows=%d eligible=%d rejected=%d err=%v", rows, eligible, rejected, err)
+	}
+}

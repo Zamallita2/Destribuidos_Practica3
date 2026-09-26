@@ -21,26 +21,24 @@ func FlightsOverlap(a, b models.Vuelo) bool {
 	return a.IDAvion == b.IDAvion && a.SalidaProgramada < b.LlegadaProgramada && b.SalidaProgramada < a.LlegadaProgramada
 }
 
-// FilterAircraftOverlaps keeps the first CSV row for each occupied interval.
-// Aircraft locations are deliberately ignored.
+// FilterAircraftOverlaps processes valid rows in CSV order. Only accepted
+// intervals of the same aircraft are compared; locations are deliberately ignored.
 func FilterAircraftOverlaps(flights []models.Vuelo) ([]models.Vuelo, []models.Vuelo) {
-	ordered := append([]models.Vuelo(nil), flights...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		if ordered[i].IDAvion != ordered[j].IDAvion {
-			return ordered[i].IDAvion < ordered[j].IDAvion
-		}
-		return ordered[i].SalidaProgramada < ordered[j].SalidaProgramada
-	})
-	accepted := make([]models.Vuelo, 0, len(ordered))
+	accepted := make([]models.Vuelo, 0, len(flights))
 	rejected := []models.Vuelo{}
-	lastArrival := map[uint]int64{}
-	for _, flight := range ordered {
-		if last, exists := lastArrival[flight.IDAvion]; exists && flight.SalidaProgramada < last {
+	byAircraft := make(map[uint][]models.Vuelo)
+	for _, flight := range flights {
+		flown := byAircraft[flight.IDAvion]
+		position := sort.Search(len(flown), func(i int) bool { return flown[i].SalidaProgramada >= flight.SalidaProgramada })
+		if position > 0 && FlightsOverlap(flown[position-1], flight) || position < len(flown) && FlightsOverlap(flown[position], flight) {
 			rejected = append(rejected, flight)
 			continue
 		}
 		accepted = append(accepted, flight)
-		lastArrival[flight.IDAvion] = flight.LlegadaProgramada
+		flown = append(flown, models.Vuelo{})
+		copy(flown[position+1:], flown[position:])
+		flown[position] = flight
+		byAircraft[flight.IDAvion] = flown
 	}
 	return accepted, rejected
 }
