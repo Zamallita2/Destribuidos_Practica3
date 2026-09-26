@@ -10,7 +10,7 @@ Sistema de reservas de vuelos distribuido en dos PostgreSQL regionales (América
 | `backend`     | Go (API REST)     | 8080         |
 | `postgres_am` | PostgreSQL 16     | 5432         |
 | `postgres_eu` | PostgreSQL 16     | 5435         |
-| `mongodb`     | MongoDB           | 27017        |
+| `mongodb`     | MongoDB 7.0       | 27017        |
 
 ## Arranque rápido
 
