@@ -1,0 +1,40 @@
+# PC 2 · Europa (Berlín): PostgreSQL Europa/Asia + servidor Europa.
+# Uso, desde la carpeta distribuido/:
+#   docker compose -f docker-compose.pc-europa.yml up -d --build
+name: airres-europa
+
+services:
+  postgres_eu:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: airres_eu
+    ports:
+      - "5435:5432"
+    volumes:
+      - pgdata_eu:/var/lib/postgresql/data
+      - ../init-scripts/init-pg-eu.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend_eu:
+    extends:
+      file: backend-common.yml
+      service: backend
+    ports:
+      - "8092:8080"
+    environment:
+      NODE_ID: europa
+      NODE_PRIMARY: "false"
+      TZ: Europe/Berlin
+    depends_on:
+      postgres_eu:
+        condition: service_healthy
+
+volumes:
+  pgdata_eu:

@@ -1,0 +1,42 @@
+# PC 1 · América (La Paz): PostgreSQL América + servidor América (principal).
+# Uso, desde la carpeta distribuido/:
+#   docker compose -f docker-compose.pc-america.yml up -d --build
+name: airres-america
+
+services:
+  postgres_am:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: airres_am
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_am:/var/lib/postgresql/data
+      - ../init-scripts/init-pg-am.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend_am:
+    extends:
+      file: backend-common.yml
+      service: backend
+    ports:
+      - "8091:8080"
+    environment:
+      NODE_ID: america
+      NODE_PRIMARY: "true"
+      TZ: America/La_Paz
+      # Espera hasta 10 minutos a que la PC de Europa encienda su base.
+      STARTUP_WAIT_SECONDS: "600"
+    depends_on:
+      postgres_am:
+        condition: service_healthy
+
+volumes:
+  pgdata_am:

@@ -1,3 +1,37 @@
+x-backend: &backend
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  volumes:
+    - ./backend/uploads:/app/uploads
+    - ./backend/data:/app/data
+    - ./dataset:/app/dataset
+    - ./reports:/app/reports
+    - ./wallet-secrets:/run/wallet-secrets:ro
+  networks:
+    - airres_network
+
+x-backend-env: &backend-env
+  DB_PG1_DSN: host=postgres_am user=postgres password=root dbname=airres_am port=5432 sslmode=disable
+  DB_PG2_DSN: host=postgres_eu user=postgres password=root dbname=airres_eu port=5432 sslmode=disable
+  DB_MONGO_URI: mongodb://root:root@mongodb:27017/
+  DB_MONGO_NAME: airres_sync
+  PERCENTAGE_SOLD: "73"
+  PERCENTAGE_RESERVED: "3"
+  REFUND_DELAY_MINUTES: "15"
+  SEED_DEMO_FLIGHTS: "false"
+  CLUSTER_PEERS: america=http://backend_am:8080,europa=http://backend_eu:8080,asia=http://backend_as:8080
+  BOARDING_PASS_SECRET: ${BOARDING_PASS_SECRET:-demo-only-change-this-before-real-use-2026}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3001}
+  QR_LAN_URL_FILE: /app/data/qr-lan-url.txt
+  APPLE_PASS_TYPE_ID: ${APPLE_PASS_TYPE_ID:-}
+  APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+  APPLE_PASS_CERT_PATH: ${APPLE_PASS_CERT_PATH:-}
+  APPLE_PASS_KEY_PATH: ${APPLE_PASS_KEY_PATH:-}
+  APPLE_WWDR_CERT_PATH: ${APPLE_WWDR_CERT_PATH:-}
+  GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID:-}
+  GOOGLE_WALLET_CREDENTIALS_PATH: ${GOOGLE_WALLET_CREDENTIALS_PATH:-}
+
 services:
   # Next.js Frontend
   frontend:
@@ -5,39 +39,38 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        API_PROXY_TARGET: http://backend:8080
+        API_PROXY_TARGET: http://gateway:8080
     ports:
       - "3001:3000"
     depends_on:
-      - backend
+      - gateway
     networks:
       - airres_network
 
-  # Go API Backend
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+  # API gateway: routes each request to its regional server, with failover
+  gateway:
+    image: nginx:1.27-alpine
     ports:
       - "8080:8080"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend_am
+      - backend_eu
+      - backend_as
+    networks:
+      - airres_network
+
+  # API server 1 - America (La Paz). Primary: runs the import and housekeeping.
+  backend_am:
+    <<: *backend
+    ports:
+      - "8091:8080"
     environment:
-      - DB_PG1_DSN=host=postgres_am user=postgres password=root dbname=airres_am port=5432 sslmode=disable
-      - DB_PG2_DSN=host=postgres_eu user=postgres password=root dbname=airres_eu port=5432 sslmode=disable
-      - DB_MONGO_URI=mongodb://root:root@mongodb:27017/
-      - DB_MONGO_NAME=airres_sync
-      - PERCENTAGE_SOLD=73
-      - REFUND_DELAY_MINUTES=15
-      - SEED_DEMO_FLIGHTS=false
-      - BOARDING_PASS_SECRET=${BOARDING_PASS_SECRET:-demo-only-change-this-before-real-use-2026}
-      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:3001}
-      - QR_LAN_URL_FILE=/app/data/qr-lan-url.txt
-      - APPLE_PASS_TYPE_ID=${APPLE_PASS_TYPE_ID:-}
-      - APPLE_TEAM_ID=${APPLE_TEAM_ID:-}
-      - APPLE_PASS_CERT_PATH=${APPLE_PASS_CERT_PATH:-}
-      - APPLE_PASS_KEY_PATH=${APPLE_PASS_KEY_PATH:-}
-      - APPLE_WWDR_CERT_PATH=${APPLE_WWDR_CERT_PATH:-}
-      - GOOGLE_WALLET_ISSUER_ID=${GOOGLE_WALLET_ISSUER_ID:-}
-      - GOOGLE_WALLET_CREDENTIALS_PATH=${GOOGLE_WALLET_CREDENTIALS_PATH:-}
+      <<: *backend-env
+      NODE_ID: america
+      NODE_PRIMARY: "true"
+      TZ: America/La_Paz
     depends_on:
       postgres_am:
         condition: service_healthy
@@ -45,14 +78,39 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_started
-    volumes:
-      - ./backend/uploads:/app/uploads
-      - ./backend/data:/app/data
-      - ./dataset:/app/dataset
-      - ./reports:/app/reports
-      - ./wallet-secrets:/run/wallet-secrets:ro
-    networks:
-      - airres_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 120
+
+  # API server 2 - Europe (Berlin)
+  backend_eu:
+    <<: *backend
+    ports:
+      - "8092:8080"
+    environment:
+      <<: *backend-env
+      NODE_ID: europa
+      NODE_PRIMARY: "false"
+      TZ: Europe/Berlin
+    depends_on:
+      backend_am:
+        condition: service_healthy
+
+  # API server 3 - Asia (Beijing)
+  backend_as:
+    <<: *backend
+    ports:
+      - "8093:8080"
+    environment:
+      <<: *backend-env
+      NODE_ID: asia
+      NODE_PRIMARY: "false"
+      TZ: Asia/Shanghai
+    depends_on:
+      backend_am:
+        condition: service_healthy
 
   # PostgreSQL - Region America
   postgres_am:

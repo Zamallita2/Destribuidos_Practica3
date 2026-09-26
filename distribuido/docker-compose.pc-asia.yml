@@ -1,0 +1,59 @@
+# PC 3 · Asia (Pekín): MongoDB + servidor Asia + gateway + frontend.
+# Uso, desde la carpeta distribuido/:
+#   docker compose -f docker-compose.pc-asia.yml up -d --build
+name: airres-asia
+
+services:
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: airres_sync
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+      - ../init-scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js
+
+  backend_as:
+    extends:
+      file: backend-common.yml
+      service: backend
+    ports:
+      - "8093:8080"
+    environment:
+      NODE_ID: asia
+      NODE_PRIMARY: "false"
+      TZ: Asia/Shanghai
+    depends_on:
+      - mongodb
+
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      AM_HOST: ${AM_HOST}
+      EU_HOST: ${EU_HOST}
+      AS_HOST: ${AS_HOST}
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
+    volumes:
+      - ./nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        API_PROXY_TARGET: http://gateway:8080
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    depends_on:
+      - gateway
+
+volumes:
+  mongodata:

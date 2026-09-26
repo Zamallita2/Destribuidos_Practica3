@@ -1,0 +1,48 @@
+# Gateway para los tres servidores repartidos en PCs distintas (Tailscale).
+# nginx reemplaza ${AM_HOST}, ${EU_HOST} y ${AS_HOST} al iniciar el contenedor.
+events {}
+
+http {
+  upstream node_america {
+    server ${AM_HOST}:8091 max_fails=1 fail_timeout=10s;
+    server ${EU_HOST}:8092 backup;
+    server ${AS_HOST}:8093 backup;
+  }
+  upstream node_europa {
+    server ${EU_HOST}:8092 max_fails=1 fail_timeout=10s;
+    server ${AS_HOST}:8093 backup;
+    server ${AM_HOST}:8091 backup;
+  }
+  upstream node_asia {
+    server ${AS_HOST}:8093 max_fails=1 fail_timeout=10s;
+    server ${EU_HOST}:8092 backup;
+    server ${AM_HOST}:8091 backup;
+  }
+
+  map $http_x_region $region_node {
+    default  node_america;
+    America  node_america;
+    Europa   node_europa;
+    Asia     node_asia;
+  }
+
+  server {
+    listen 8080;
+    client_max_body_size 200m;
+
+    proxy_connect_timeout 3s;
+    proxy_read_timeout 600s;
+    proxy_next_upstream error timeout http_502 http_503 http_504;
+    proxy_next_upstream_tries 3;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    location /api/entradas {
+      proxy_pass http://node_america;
+    }
+
+    location / {
+      proxy_pass http://$region_node;
+    }
+  }
+}

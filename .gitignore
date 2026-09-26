@@ -7,3 +7,6 @@
 /backend/data/qr-lan-url.txt.tmp
 /backend/data/qr-network-watcher.pid
 /backend/uploads/
+
+# Configuración de las PCs (contiene contraseñas)
+/distribuido/.env

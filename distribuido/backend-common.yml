@@ -1,0 +1,26 @@
+# Configuración común de los servidores de aplicación. La usan los tres
+# archivos docker-compose.pc-*.yml mediante "extends".
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_PG1_DSN: host=${AM_HOST} user=postgres password=${POSTGRES_PASSWORD} dbname=airres_am port=5432 sslmode=disable connect_timeout=5
+      DB_PG2_DSN: host=${EU_HOST} user=postgres password=${POSTGRES_PASSWORD} dbname=airres_eu port=5435 sslmode=disable connect_timeout=5
+      DB_MONGO_URI: mongodb://root:${MONGO_PASSWORD}@${AS_HOST}:27017/?serverSelectionTimeoutMS=5000
+      DB_MONGO_NAME: airres_sync
+      CLUSTER_PEERS: america=http://${AM_HOST}:8091,europa=http://${EU_HOST}:8092,asia=http://${AS_HOST}:8093
+      PERCENTAGE_SOLD: ${PERCENTAGE_SOLD:-73}
+      PERCENTAGE_RESERVED: ${PERCENTAGE_RESERVED:-3}
+      REFUND_DELAY_MINUTES: ${REFUND_DELAY_MINUTES:-15}
+      SEED_DEMO_FLIGHTS: "false"
+      BOARDING_PASS_SECRET: ${BOARDING_PASS_SECRET}
+      PUBLIC_BASE_URL: http://${AS_HOST}:3001
+      QR_LAN_URL_FILE: /app/data/qr-lan-url.txt
+    volumes:
+      - ../backend/uploads:/app/uploads
+      - ../backend/data:/app/data
+      - ../dataset:/app/dataset
+      - ../reports:/app/reports
