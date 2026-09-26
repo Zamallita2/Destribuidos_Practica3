@@ -67,67 +67,63 @@ export default function CountrySelector() {
     c.iso2.toLowerCase().includes(searchQuery.toLowerCase())
   ).slice(0, 50); // Limit to top 50 for performance
 
+  const current = countries.find((country) => country.iso2 === selected.code);
   return (
     <div className="relative z-50">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 glass-card hover:bg-white/10 transition-colors rounded-full text-sm font-medium border border-gray-700/50"
+        aria-expanded={isOpen}
+        aria-label="País de compra"
+        className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-navy-900 shadow-sm transition hover:border-navy-300"
       >
-        <Globe className="w-4 h-4 text-blue-400" />
-        <span>{countries.find((country) => country.iso2 === selected.code) ? countryName(countries.find((country) => country.iso2 === selected.code)!) : selected.name}</span>
+        <Globe className="h-4 w-4 text-navy-500" />
+        <span className="max-w-[120px] truncate sm:max-w-none">{current ? countryName(current) : selected.name}</span>
+        <span className="hidden rounded-full bg-navy-50 px-2 py-0.5 text-[10px] font-bold uppercase text-navy-600 sm:inline">{selected.region}</span>
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            initial={{ opacity: 0, y: 8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="absolute right-0 mt-3 w-72 glass-panel p-2 shadow-2xl overflow-hidden"
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-lift"
           >
-            <div className="p-2 border-b border-white/10 mb-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
-                <input 
-                  type="text" 
-                  autoFocus
-                  placeholder="Buscar país..."
-                  className="w-full bg-white/5 pl-9 pr-3 py-2 rounded-lg text-sm text-white outline-none border border-transparent focus:border-blue-500/50 transition-all font-heading"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+            <div className="relative mb-2 p-1">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Buscar país..."
+                className="field pl-9"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
 
-            <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+            <div className="max-h-[300px] overflow-y-auto">
               {loading ? (
-                <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
+                <div className="flex justify-center p-10"><Loader2 className="animate-spin text-navy-500" /></div>
               ) : filteredCountries.length === 0 ? (
-                <div className="p-10 text-center text-gray-500 text-xs">No se encontraron resultados</div>
+                <div className="p-10 text-center text-xs text-slate-500">No se encontraron resultados</div>
               ) : (
                 filteredCountries.map((c) => (
                   <button
                     key={c.iso2}
                     onClick={() => handleSelect(c)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors group ${
-                      selected.code === c.iso2 
-                      ? "bg-blue-500/20 text-blue-400 font-bold" 
-                      : "hover:bg-white/5 text-gray-300"
+                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                      selected.code === c.iso2 ? "bg-navy-50 font-semibold text-navy-900" : "text-slate-700 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="flex flex-col items-start translate-x-0 group-hover:translate-x-1 transition-transform">
-                      <span className="font-heading">{countryName(c)}</span>
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">{language === "en" ? "Server" : "Servidor"}: {c.server}</span>
-                    </div>
-                    {selected.code === c.iso2 && <Check className="w-4 h-4 text-blue-400" />}
+                    <span className="flex flex-col">
+                      <span>{countryName(c)}</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{language === "en" ? "Server" : "Servidor"}: {c.server}</span>
+                    </span>
+                    {selected.code === c.iso2 && <Check className="h-4 w-4 text-navy-600" />}
                   </button>
                 ))
               )}
-            </div>
-            
-            <div className="p-2 mt-2 bg-blue-500/5 rounded-lg border border-blue-500/10">
-              <p className="text-[9px] text-blue-400 text-center uppercase font-bold tracking-widest">Global Pabon-go Routing v2.0</p>
             </div>
           </motion.div>
         )}

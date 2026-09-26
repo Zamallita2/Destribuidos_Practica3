@@ -33,17 +33,22 @@ export default function VerificarBoleto({ params }: { params: { id: string } }) 
       .finally(() => setLoading(false));
   }, [params.id]);
 
-  return <div className="mx-auto flex min-h-[65vh] max-w-lg items-center justify-center">
-    <section className="w-full rounded-2xl border border-white/10 bg-[#202530] p-8 text-center shadow-2xl">
-      {loading ? <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-400" /> : result?.valid ? <CheckCircle2 className="mx-auto h-14 w-14 text-green-400" /> : <XCircle className="mx-auto h-14 w-14 text-red-400" />}
-      <h1 className="mt-5 text-2xl font-bold text-white">{loading ? "Verificando boleto…" : result?.valid ? "Boleto válido" : "No se pudo validar"}</h1>
-      {result?.valid ? <div className="mt-6 space-y-2 text-left text-gray-200">
-        <p><strong>Pasajero:</strong> {result.pasajero}</p>
-        <p><strong>Boleto:</strong> #{result.id_boleto}</p>
-        <p><strong>Vuelo:</strong> #{result.id_vuelo}</p>
-        <p><strong>Asiento:</strong> #{result.id_asiento}</p>
-      </div> : <p className="mt-4 text-sm text-gray-300">{error}</p>}
-      <p className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-400"><ShieldCheck size={15} /> Verificación en vivo · Aerolíneas Pabón</p>
+  const valid = !loading && result?.valid;
+  return <div className="mx-auto flex min-h-[65vh] max-w-md items-center justify-center">
+    <section className="w-full overflow-hidden rounded-3xl bg-white text-center shadow-lift">
+      <div className={`px-8 py-8 ${loading ? "bg-navy-900" : valid ? "bg-emerald-600" : "bg-red-600"} text-white`}>
+        {loading ? <Loader2 className="mx-auto h-12 w-12 animate-spin" /> : valid ? <CheckCircle2 className="mx-auto h-14 w-14" /> : <XCircle className="mx-auto h-14 w-14" />}
+        <h1 className="mt-4 text-2xl font-bold text-white">{loading ? "Verificando boleto…" : valid ? "Boleto válido" : "No se pudo validar"}</h1>
+      </div>
+      <div className="p-8">
+        {valid && result ? <dl className="grid grid-cols-2 gap-4 text-left">
+          <div className="col-span-2"><dt className="text-xs text-slate-500">Pasajero</dt><dd className="text-lg font-bold text-navy-900">{result.pasajero}</dd></div>
+          <div><dt className="text-xs text-slate-500">Boleto</dt><dd className="font-semibold text-navy-900">#{result.id_boleto}</dd></div>
+          <div><dt className="text-xs text-slate-500">Vuelo</dt><dd className="font-semibold text-navy-900">#{result.id_vuelo}</dd></div>
+          <div><dt className="text-xs text-slate-500">Asiento</dt><dd className="font-semibold text-navy-900">#{result.id_asiento}</dd></div>
+        </dl> : !loading && <p className="text-sm text-slate-600">{error}</p>}
+        <p className="mt-6 flex items-center justify-center gap-2 border-t border-slate-100 pt-4 text-xs text-slate-500"><ShieldCheck size={15} /> Verificación en vivo · Aerolíneas Pabón</p>
+      </div>
     </section>
   </div>;
 }

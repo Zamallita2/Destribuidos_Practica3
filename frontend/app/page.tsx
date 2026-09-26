@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plane, Users, CalendarSync, Banknote, Database, Armchair, ArrowRight } from "lucide-react";
+import { Plane, Users, CalendarSync, Banknote, Database, ArrowRight, Ticket, Map as MapIcon, Server } from "lucide-react";
 import FlightMap from "@/components/FlightMap";
 import { formatFlightLocalTime } from "@/lib/flightTime";
 import { useLanguage } from "@/context/LanguageContext";
+import { FlightStatusBadge, KpiCard } from "@/components/ui";
 
 type City = { id: number; codigo: string; pais: string; time_zone: string };
 type Flight = { id: number; id_origen: number; id_destino: number; id_estado_vuelo: number; salida_programada: number; llegada_programada: number };
@@ -13,7 +14,6 @@ type Departure = { flight: Flight; origin?: City; destination?: City; available:
 type Summary = { vuelos: number; manifiestos_generados: number; vendidos: number; reservados: number; ingresos_primera: number; ingresos_turistica: number };
 type Health = { nodes: { postgres_america: boolean; postgres_europa_asia: boolean; mongodb: boolean } };
 
-const stateNames: Record<number, string> = { 1: "Programado", 2: "Embarcando", 3: "Despegó", 4: "En vuelo", 5: "Aterrizó", 6: "Llegó", 7: "Cancelado", 8: "Retrasado" };
 const integer = (value: number) => value.toLocaleString("es-BO");
 const money = (value: number) => `$${Math.round(value).toLocaleString("es-BO")}`;
 
@@ -62,58 +62,98 @@ export default function Dashboard() {
   }, []);
 
   const stats = [
-    { label: "Vuelos registrados", value: summary ? integer(summary.vuelos) : "—", icon: Plane, note: "CSV histórico y vuelos de demostración" },
-    { label: "Vuelos con asientos cargados", value: summary ? integer(summary.manifiestos_generados) : "—", icon: Database, note: "Manifiestos generados" },
-    { label: t("dashboard.stats.sold"), value: summary ? integer(summary.vendidos) : "—", icon: Users, note: "Asientos vendidos en todos los vuelos" },
-    { label: t("dashboard.stats.reserved"), value: summary ? integer(summary.reservados) : "—", icon: CalendarSync, note: "Asientos reservados" },
-    { label: t("dashboard.stats.income_first"), value: summary ? money(summary.ingresos_primera) : "—", icon: Banknote, note: "Estimación del modelo" },
-    { label: t("dashboard.stats.income_regular"), value: summary ? money(summary.ingresos_turistica) : "—", icon: Banknote, note: "Estimación del modelo" },
+    { label: "Vuelos registrados", value: summary ? integer(summary.vuelos) : "—", icon: Plane, note: "CSV histórico y vuelos de demostración", tone: "navy" as const },
+    { label: "Vuelos con asientos cargados", value: summary ? integer(summary.manifiestos_generados) : "—", icon: Database, note: "Manifiestos generados", tone: "navy" as const },
+    { label: t("dashboard.stats.sold"), value: summary ? integer(summary.vendidos) : "—", icon: Users, note: "Asientos vendidos en todos los vuelos", tone: "green" as const },
+    { label: t("dashboard.stats.reserved"), value: summary ? integer(summary.reservados) : "—", icon: CalendarSync, note: "Asientos reservados", tone: "amber" as const },
+    { label: t("dashboard.stats.income_first"), value: summary ? money(summary.ingresos_primera) : "—", icon: Banknote, note: "Estimación del modelo", tone: "gold" as const },
+    { label: t("dashboard.stats.income_regular"), value: summary ? money(summary.ingresos_turistica) : "—", icon: Banknote, note: "Estimación del modelo", tone: "gold" as const },
   ];
   const nodes = [
     { name: "PostgreSQL América", online: health?.nodes.postgres_america },
     { name: "PostgreSQL Europa/Asia", online: health?.nodes.postgres_europa_asia },
     { name: "MongoDB", online: health?.nodes.mongodb },
   ];
+  const quickLinks = [
+    { href: "/boletos", label: "Comprar un boleto", icon: Ticket },
+    { href: "/vuelos", label: "Ver todos los vuelos", icon: Plane },
+    { href: "/sugerencias", label: "Planificar una ruta", icon: MapIcon },
+  ];
+  const boardColumns = "grid-cols-[4rem_minmax(0,1fr)_auto] sm:grid-cols-[4rem_8.5rem_minmax(0,1fr)_3.5rem_7.5rem]";
+  const time = (epoch: number, zone?: string) => new Date(epoch * 1000).toLocaleTimeString(language === "en" ? "en-US" : "es-BO", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: zone || "UTC" });
 
   return (
-    <div className="space-y-8 pb-12">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h2 className="text-3xl font-bold text-white">Panel de la aerolínea</h2><p className="mt-2 text-gray-400">Resumen de los vuelos cargados y las próximas salidas.</p></div>
-        <Link href="/vuelos" className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-500">Ver todos los vuelos <ArrowRight className="h-4 w-4" /></Link>
-      </div>
-      {error && <p role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">No se pudo actualizar el panel. Los datos mostrados pueden estar desactualizados.</p>}
+    <div className="fade-up space-y-6">
+      <section className="relative overflow-hidden rounded-3xl bg-navy-900 px-6 py-8 text-white shadow-lift sm:px-10 sm:py-10">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-gold-400/20 blur-3xl" />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 left-1/3 h-64 w-64 rounded-full bg-navy-500/30 blur-3xl" />
+        <Plane aria-hidden="true" className="pointer-events-none absolute right-8 top-8 hidden h-28 w-28 -rotate-12 text-white/5 md:block" />
+        <div className="relative">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-300">Aerolíneas Rafael Pabón</p>
+          <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">Panel de la aerolínea</h1>
+          <p className="mt-2 max-w-2xl text-navy-100">Resumen de los vuelos cargados y las próximas salidas.</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            {quickLinks.map(({ href, label, icon: Icon }, index) => <Link key={href} href={href} className={index === 0 ? "btn-gold" : "btn border border-white/20 bg-white/10 text-white hover:bg-white/20"}>
+              <Icon className="h-4 w-4" aria-hidden="true" />{label}
+            </Link>)}
+          </div>
+        </div>
+      </section>
+
+      {error && <p role="alert" className="alert alert-warning">No se pudo actualizar el panel. Los datos mostrados pueden estar desactualizados.</p>}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {stats.map(({ label, value, icon: Icon, note }) => <div key={label} className="glass-card p-5">
-          <Icon className="mb-3 h-6 w-6 text-blue-300" aria-hidden="true" /><p className="text-2xl font-bold text-white">{value}</p>
-          <p className="mt-1 text-sm font-semibold text-gray-200">{label}</p><p className="mt-1 text-xs text-gray-400">{note}</p>
-        </div>)}
+        {stats.map((stat) => <KpiCard key={stat.label} {...stat} />)}
       </div>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
-        <section className="glass-panel min-w-0 p-5 sm:p-6">
-          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-            <div><h3 className="text-xl font-bold text-white">Próximas salidas</h3><p className="mt-1 text-sm text-gray-400">Hasta 10 vuelos futuros. El catálogo completo incluye los vuelos históricos.</p></div>
-            <Link href="/vuelos" className="text-sm font-semibold text-blue-300 hover:underline">Abrir catálogo</Link>
+        <section className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div><h2 className="section-title">Próximas salidas</h2><p className="section-subtitle">Hasta 10 vuelos futuros. El catálogo completo incluye los vuelos históricos.</p></div>
+            <Link href="/vuelos" className="btn-ghost btn-sm">Abrir catálogo <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
           </div>
-          <div className="space-y-2">
-            {loading && <p className="py-10 text-center text-gray-400">Cargando salidas…</p>}
-            {!loading && departures.length === 0 && <p className="py-10 text-center text-gray-400">No hay salidas futuras. Los vuelos históricos están en el catálogo.</p>}
-            {departures.map(({ flight, origin, destination, available }) => <div key={flight.id} className="grid gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-center">
-              <div><p className="text-xs text-gray-400">Vuelo AP {flight.id}</p><p className="font-semibold text-white">{origin?.codigo || "?"} → {destination?.codigo || "?"}</p><p className="text-xs text-gray-400">{origin?.pais || "Origen"} → {destination?.pais || "Destino"}</p></div>
-              <div className="text-sm text-gray-200"><p><span className="text-gray-400">Sale:</span> {formatFlightLocalTime(flight.salida_programada, origin?.time_zone || "UTC", language)}</p><p><span className="text-gray-400">Llega:</span> {formatFlightLocalTime(flight.llegada_programada, destination?.time_zone || "UTC", language)}</p></div>
-              <div className="text-sm lg:text-right"><p className="font-medium text-blue-200"><Armchair className="mr-1 inline h-4 w-4" aria-hidden="true" />{available === null ? "Cupos sin consultar" : `${integer(available)} asientos disponibles`}</p><p className="text-gray-400">{stateNames[flight.id_estado_vuelo] || "Sin estado"}</p></div>
-            </div>)}
+          <div className="fids">
+            <div className={`fids-head ${boardColumns}`}>
+              <span>{t("dashboard.table.time")}</span>
+              <span className="hidden sm:block">{t("dashboard.table.flight")}</span>
+              <span>{t("dashboard.table.destination")}</span>
+              <span className="hidden text-right sm:block">{t("dashboard.table.avail")}</span>
+              <span className="text-right">{t("dashboard.table.remarks")}</span>
+            </div>
+            {loading && <p className="px-5 py-10 text-center text-navy-200">Cargando salidas…</p>}
+            {!loading && departures.length === 0 && <p className="px-5 py-10 text-center text-navy-200">No hay salidas futuras. Los vuelos históricos están en el catálogo.</p>}
+            {departures.map(({ flight, origin, destination, available }) => <Link key={flight.id} href={`/dashboard/vuelos/${flight.id}`} className={`fids-row ${boardColumns} transition hover:bg-white/5`}>
+              <span className="text-lg font-semibold text-gold-300">{time(flight.salida_programada, origin?.time_zone)}</span>
+              <span className="hidden whitespace-nowrap text-navy-100 sm:block">AP {flight.id}</span>
+              <span className="min-w-0">
+                <span className="block truncate font-sans text-base font-semibold text-white">{origin?.codigo || "?"} → {destination?.codigo || "?"}</span>
+                <span className="block truncate font-sans text-xs text-navy-300">{destination?.pais || "Destino"} · {formatFlightLocalTime(flight.salida_programada, origin?.time_zone || "UTC", language)}</span>
+              </span>
+              <span className="hidden text-right text-navy-100 sm:block">{available === null ? "—" : integer(available)}</span>
+              <span className="text-right font-sans"><FlightStatusBadge state={flight.id_estado_vuelo} /></span>
+            </Link>)}
           </div>
         </section>
-        <section className="glass-panel p-5 sm:p-6">
-          <h3 className="text-xl font-bold text-white">Estado de servidores</h3>
-          <p className="mt-1 text-sm text-gray-400">Indica si cada base de datos responde. No representa el avance de la sincronización.</p>
-          <div className="mt-5 space-y-3">{nodes.map((node) => <div key={node.name} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 p-3">
-            <span className="text-sm text-gray-200">{node.name}</span>
-            <span className={`rounded-md px-2 py-1 text-xs font-semibold ${node.online === undefined ? "bg-gray-500/20 text-gray-300" : node.online ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>{node.online === undefined ? "Consultando" : node.online ? "Disponible" : "Sin conexión"}</span>
-          </div>)}</div>
+
+        <section className="card card-body h-max">
+          <div className="flex items-center gap-2"><Server className="h-5 w-5 text-navy-600" aria-hidden="true" /><h2 className="section-title">Estado de servidores</h2></div>
+          <p className="section-subtitle">Indica si cada base de datos responde. No representa el avance de la sincronización.</p>
+          <ul className="mt-5 space-y-2.5">{nodes.map((node) => <li key={node.name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+            <span className="flex items-center gap-2.5 text-sm font-medium text-navy-900">
+              <span className={`h-2.5 w-2.5 rounded-full ${node.online === undefined ? "bg-slate-300" : node.online ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" : "bg-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.2)]"}`} aria-hidden="true" />
+              {node.name}
+            </span>
+            <span className={`badge ${node.online === undefined ? "badge-slate" : node.online ? "badge-green" : "badge-red"}`}>{node.online === undefined ? "Consultando" : node.online ? "Disponible" : "Sin conexión"}</span>
+          </li>)}</ul>
+          <Link href="/sincronizacion" className="btn-secondary mt-5 w-full">Ver sincronización <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
         </section>
       </div>
-      <section><h3 className="mb-2 text-xl font-bold text-white">Mapa de rutas próximas</h3><p className="mb-4 text-sm text-gray-400">Vista ilustrativa de los próximos vuelos consultados; no muestra los 29.000 registros a la vez.</p><FlightMap /></section>
+
+      <section>
+        <h2 className="section-title">Mapa de rutas próximas</h2>
+        <p className="section-subtitle mb-4">Vista ilustrativa de los próximos vuelos consultados; no muestra los 29.000 registros a la vez.</p>
+        <FlightMap />
+      </section>
     </div>
   );
 }

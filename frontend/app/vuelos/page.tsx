@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Ticket, Info, Loader2, ArrowRight, X, Search } from "lucide-react";
+import { Info, Loader2, ArrowRight, X, Search, Plane, Plus, CalendarClock, Armchair, BarChart3 } from "lucide-react";
+import Link from "next/link";
+import { FlightStatusBadge, PageHeader, EmptyState, RouteCodes } from "@/components/ui";
 import { formatFlightLocalTime } from "@/lib/flightTime";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -10,6 +12,8 @@ const flightStates: Record<number, string> = {
   1: "Programado", 2: "Embarcando", 3: "Despegó",
   4: "En vuelo", 5: "Aterrizó", 6: "Llegó", 7: "Cancelado", 8: "Retrasado",
 };
+
+const cityLabel = (ciudades: any[], id: number) => ciudades.find((c: any) => c.id === id);
 
 export default function Vuelos() {
   const { language } = useLanguage();
@@ -169,192 +173,7 @@ export default function Vuelos() {
     setStopoverRoute((prev) => prev.slice(0, -1));
   };
 
-  return (
-    <div className="animate-in fade-in slide-in-from-bottom-5 duration-500">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 flex items-center gap-3">
-            <Ticket className="w-8 h-8 text-blue-500" />
-            Catálogo de vuelos
-          </h2>
-          <p className="text-gray-400 mt-2">Consulta los vuelos importados del CSV y los vuelos de demostración. Los registros históricos también aparecen aquí.</p>
-        </div>
-        <button onClick={() => { setShowAddModal(true); setErrorVuelo(null); setStopoverRoute([]); setCreationMode("direct"); }} className="btn-primary flex shrink-0 items-center justify-center gap-2 whitespace-nowrap">
-            Nuevo Vuelo
-        </button>
-      </div>
-
-      <div className="glass-panel p-6">
-        {/* Modals and forms */}
-        {showAddModal && createPortal(
-          <div role="dialog" aria-modal="true" aria-label="Programar vuelo" className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center overflow-y-auto p-4">
-             <div className="bg-[#1a1d2d] border border-gray-700/50 p-6 rounded-2xl w-full max-w-lg shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500" />
-                
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-2xl font-bold font-heading text-white">Programar Vuelo</h3>
-                    <div className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[10px] text-blue-400 font-bold uppercase tracking-wider">{currentRegion}</div>
-                 </div>
-
-                {/* MODE TOGGLE */}
-                <div className="flex bg-white/5 p-1 rounded-xl mb-6 border border-white/10">
-                   <button 
-                     type="button"
-                     onClick={() => { setCreationMode("direct"); setErrorVuelo(null); setStopoverRoute([]); }}
-                     className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${creationMode === "direct" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"}`}
-                   >
-                     Vuelo Directo
-                   </button>
-                   <button 
-                     type="button"
-                     onClick={() => { setCreationMode("advanced"); setErrorVuelo(null); setStopoverRoute([]); }}
-                     className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${creationMode === "advanced" ? "bg-purple-600 text-white" : "text-gray-400 hover:text-white"}`}
-                   >
-                     Avanzado (Escalas)
-                   </button>
-                </div>
-                
-                {errorVuelo && (
-                  <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-400 text-sm animate-in zoom-in slide-in-from-top-2 duration-300">
-                     <Info className="w-5 h-5 shrink-0" />
-                     <p>{errorVuelo}</p>
-                  </div>
-                )}
-
-                {creationMode === "direct" ? (
-                  <div className="space-y-4">
-                     <div>
-                       <label className="text-sm font-semibold text-gray-400">Origen</label>
-                       <select 
-                          id="org" 
-                          className="w-full mt-1 bg-white/5 p-2 rounded border border-gray-700 text-white outline-none"
-                          onChange={validateRoute}
-                        >
-                          <option value="">Seleccione Origen...</option>
-                          {ciudades.map((c: any) => (
-                             <option key={c.id} value={c.id} className="text-black">{c.codigo} - {c.pais}</option>
-                          ))}
-                       </select>
-                     </div>
-                     <div>
-                       <label className="text-sm font-semibold text-gray-400">Destino</label>
-                      <select 
-                          id="dst" 
-                          className="w-full mt-1 bg-white/5 p-2 rounded border border-gray-700 text-white outline-none"
-                          onChange={validateRoute}
-                        >
-                           <option value="">Seleccione Destino...</option>
-                           {ciudades.map((c: any) => (
-                              <option key={c.id} value={c.id} className="text-black">{c.codigo} - {c.pais}</option>
-                           ))}
-                        </select>
-                     </div>
-                     <div>
-                       <label className="text-sm font-semibold text-gray-400">Avión</label>
-                       <select id="avion" className="w-full mt-1 bg-white/5 p-2 rounded border border-gray-700 text-white outline-none">
-                          <option value="">Seleccione Avión...</option>
-                          {aviones.map((a: any) => (
-                             <option key={a.id} value={a.id} className="text-black">ID {a.id} · {a.nombre} ({a.fabricante})</option>
-                          ))}
-                       </select>
-                     </div>
-                     <div>
-                       <label className="text-sm font-semibold text-gray-400">Salida Programada (Fecha y Hora)</label>
-                       <input type="datetime-local" id="fechaOut" className="w-full mt-1 bg-white/5 p-2 rounded border border-gray-700 text-white" />
-                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                     {/* ADVANCED STOPOVER MODE */}
-                     <div>
-                        <label className="text-sm font-semibold text-purple-400">Paso 1: Ciudad de Inicio</label>
-                        <select
-                          disabled={stopoverRoute.length > 0}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            if (val) setStopoverRoute([val]);
-                            else setStopoverRoute([]);
-                          }}
-                          value={stopoverRoute[0] || ""}
-                          className="w-full mt-1 bg-white/5 p-2 rounded border border-purple-500/40 text-white outline-none disabled:opacity-60"
-                        >
-                          <option value="">Seleccione Origen Inicial...</option>
-                          {ciudades.map((c: any) => (
-                             <option key={c.id} value={c.id} className="text-black">{c.codigo} - {c.pais}</option>
-                          ))}
-                        </select>
-                     </div>
-
-                     {stopoverRoute.length > 0 && (
-                        <div>
-                           <label className="text-sm font-semibold text-blue-400">
-                             Paso {stopoverRoute.length + 1}: Agregar Siguiente Tramo / Escala desde {(ciudades.find((c: any) => c.id === stopoverRoute[stopoverRoute.length - 1]) as any)?.codigo}
-                           </label>
-                           <select
-                              key={`next-dest-${stopoverRoute.length}`}
-                              onChange={(e) => {
-                                handleAddStopoverCity(e.target.value);
-                                e.target.value = "";
-                              }}
-                              className="w-full mt-1 bg-white/5 p-2 rounded border border-blue-500/40 text-white outline-none"
-                           >
-                              <option value="">+ Seleccionar Destino Conectado...</option>
-                              {getValidNextDestinations(stopoverRoute[stopoverRoute.length - 1]).map((c: any) => (
-                                 <option key={c.id} value={c.id} className="text-black">{c.codigo} - {c.pais}</option>
-                              ))}
-                           </select>
-                        </div>
-                     )}
-
-                     {/* STOPOVER ROUTE PREVIEW */}
-                     {stopoverRoute.length > 0 && (
-                        <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-2">
-                           <div className="flex justify-between items-center">
-                              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ruta Programada ({stopoverRoute.length - 1} Escalas/Tramos)</span>
-                              {stopoverRoute.length > 1 && (
-                                <button type="button" onClick={handleRemoveLastStopover} className="text-xs text-red-400 hover:text-red-300">
-                                  Quitar Último
-                                </button>
-                              )}
-                           </div>
-                           <div className="flex flex-wrap items-center gap-2 pt-2">
-                              {stopoverRoute.map((cId, idx) => {
-                                 const city: any = ciudades.find((c: any) => c.id === cId);
-                                 return (
-                                    <div key={cId} className="flex items-center gap-2">
-                                       <span className="px-2.5 py-1 bg-purple-500/20 border border-purple-500/40 text-purple-300 rounded-lg text-xs font-bold">
-                                          {city?.codigo || cId}
-                                       </span>
-                                       {idx < stopoverRoute.length - 1 && (
-                                          <ArrowRight className="w-3.5 h-3.5 text-gray-500" />
-                                       )}
-                                    </div>
-                                 );
-                              })}
-                           </div>
-                        </div>
-                     )}
-
-                     <div>
-                       <label className="text-sm font-semibold text-gray-400">Avión</label>
-                       <select id="avion" className="w-full mt-1 bg-white/5 p-2 rounded border border-gray-700 text-white outline-none">
-                          <option value="">Seleccione Avión...</option>
-                          {aviones.map((a: any) => (
-                             <option key={a.id} value={a.id} className="text-black">ID {a.id} · {a.nombre} ({a.fabricante})</option>
-                          ))}
-                       </select>
-                     </div>
-
-                     <div>
-                       <label className="text-sm font-semibold text-gray-400">Salida Inicial (Fecha y Hora)</label>
-                       <input type="datetime-local" id="fechaOut" className="w-full mt-1 bg-white/5 p-2 rounded border border-gray-700 text-white" />
-                     </div>
-                  </div>
-                )}
-
-                <div className="mt-6 flex justify-end gap-3">
-                   <button onClick={() => setShowAddModal(false)} disabled={submitting} className="px-4 py-2 rounded text-gray-400 hover:bg-white/5 disabled:opacity-50">Cancelar</button>
-                   <button id="saveBtn" disabled={submitting} onClick={async () => {
+  const saveFlights = async () => {
                       const avionId = parseInt((document.getElementById("avion") as HTMLInputElement).value);
                       const fechaStr = (document.getElementById("fechaOut") as HTMLInputElement).value;
 
@@ -469,285 +288,302 @@ export default function Vuelos() {
                             setSubmitting(false);
                          }
                       }
-                   }} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-white shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center gap-2">
-                      {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {submitting ? 'Guardando...' : 'Guardar Vuelo(s)'}
-                   </button>
-                </div>
-             </div>
-          </div>, document.body
-        )}
+                   };
 
-        {selectedVuelo && (
-          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 animate-in fade-in backdrop-blur-sm">
-             <div className="bg-[#0f111a] border border-blue-500/30 p-8 rounded-3xl w-full max-w-2xl shadow-[0_0_50px_rgba(59,130,246,0.2)] relative overflow-hidden animate-in zoom-in duration-300">
-                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-600 via-purple-500 to-blue-400" />
-                
-                <div className="flex justify-between items-start mb-8">
-                    <div>
-                        <h3 className="text-3xl font-bold font-heading text-white flex items-center gap-3">
-                            <Info className="text-blue-400 w-8 h-8" /> Detalle del Vuelo
-                        </h3>
-                        <p className="text-gray-500 font-mono mt-1">ID: VUELO-{selectedVuelo.id}</p>
-                        <a href={`/dashboard/vuelos/${selectedVuelo.id}`} className="text-blue-400 underline">Ver panel del vuelo</a>
-                    </div>
-                    <button onClick={() => setSelectedVuelo(null)} className="p-2 hover:bg-white/10 rounded-full transition text-gray-400">
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
+  const selectedOrigin = selectedVuelo ? cityLabel(ciudades, selectedVuelo.id_origen) : null;
+  const selectedDestination = selectedVuelo ? cityLabel(ciudades, selectedVuelo.id_destino) : null;
+  const filtersActive = Boolean(flightIDFilter || originFilter || destinationFilter);
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                            <p className="text-[10px] uppercase text-blue-400 font-bold tracking-widest mb-4">Ruta del Vuelo</p>
-                            <div className="flex items-center justify-between">
-                                <div className="text-center">
-                                    <p className="text-3xl font-bold text-white">{ciudades.find((c: any) => c.id === selectedVuelo.id_origen)?.codigo || "???"}</p>
-                                    <p className="text-xs text-gray-500">{ciudades.find((c: any) => c.id === selectedVuelo.id_origen)?.pais || "Desconocido"}</p>
-                                </div>
-                                <div className="flex-1 flex flex-col items-center px-4">
-                                    <div className="w-full h-px bg-blue-500/30 relative">
-                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0f111a] px-2 text-blue-400">
-                                            <ArrowRight className="w-4 h-4" />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-3xl font-bold text-white">{ciudades.find((c: any) => c.id === selectedVuelo.id_destino)?.codigo || "???"}</p>
-                                    <p className="text-xs text-gray-500">{ciudades.find((c: any) => c.id === selectedVuelo.id_destino)?.pais || "Desconocido"}</p>
-                                </div>
-                            </div>
-                        </div>
+  return (
+    <div className="fade-up">
+      <PageHeader icon={Plane} eyebrow="Operaciones de vuelo" title="Catálogo de vuelos"
+        subtitle="Consulta los vuelos importados del CSV y los vuelos de demostración. Los registros históricos también aparecen aquí."
+        actions={<button onClick={() => { setShowAddModal(true); setErrorVuelo(null); setStopoverRoute([]); setCreationMode("direct"); }} className="btn-primary">
+          <Plus className="h-4 w-4" aria-hidden="true" /> Nuevo Vuelo
+        </button>} />
 
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                            <p className="text-[10px] uppercase text-purple-400 font-bold tracking-widest mb-3">Aeronave</p>
-                            <p className="text-white font-bold">{aviones.find((a: any) => a.id === selectedVuelo.id_avion)?.nombre || "No asignado"}</p>
-                            <p className="text-xs text-gray-500">{aviones.find((a: any) => a.id === selectedVuelo.id_avion)?.fabricante || "Fabricante desconocido"}</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-6">
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                            <p className="text-[10px] uppercase text-emerald-400 font-bold tracking-widest mb-4">Horario local de cada aeropuerto</p>
-                            <div className="space-y-3">
-                                <div>
-                                    <p className="text-xs text-gray-500">Salida Programada</p>
-                                    <p className="text-white font-semibold">{toDate(selectedVuelo.salida_programada, selectedVuelo.id_origen)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-500">Llegada Estimada</p>
-                                    <p className="text-white font-semibold">{toDate(selectedVuelo.llegada_programada, selectedVuelo.id_destino)}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                            <p className="text-[10px] uppercase text-yellow-400 font-bold tracking-widest mb-3">Precios Sugeridos</p>
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <p className="text-xs text-gray-500">Regular</p>
-                                    <p className="text-lg font-bold text-emerald-400">
-                                        ${precios?.matriz_precios_regular?.[ciudades.find((c: any) => c.id === selectedVuelo.id_origen)?.codigo]?.[ciudades.find((c: any) => c.id === selectedVuelo.id_destino)?.codigo] || "N/A"}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-500 text-right">VIP</p>
-                                    <p className="text-lg font-bold text-yellow-400">
-                                        ${precios?.matriz_precios_vip?.[ciudades.find((c: any) => c.id === selectedVuelo.id_origen)?.codigo]?.[ciudades.find((c: any) => c.id === selectedVuelo.id_destino)?.codigo] || "N/A"}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="mt-10 flex justify-end items-center gap-4">
-                    <div className="flex-1 flex gap-2">
-                         <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${selectedVuelo.id_estado_vuelo === 1 ? 'bg-gray-500/20 text-gray-400' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'}`}>
-                            {flightStates[selectedVuelo.id_estado_vuelo] || 'Sin estado'}
-                         </span>
-                    </div>
-                    <button onClick={() => setSelectedVuelo(null)} className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold transition">
-                        Cerrar
-                    </button>
-                    {selectedVuelo.id_estado_vuelo < 6 && (
-                      <button
-                        onClick={() => { changeState(selectedVuelo.id, selectedVuelo.id_estado_vuelo + 1); setSelectedVuelo(null); }}
-                        className="px-5 py-3 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold transition"
-                      >
-                        Cambiar estado a «{flightStates[selectedVuelo.id_estado_vuelo + 1]}»
-                      </button>
-                    )}
-                </div>
-             </div>
-          </div>
-        )}
-
-        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-5">
-            <p className="text-sm text-blue-200">{flightIDFilter || originFilter || destinationFilter ? "Vuelos que coinciden" : scope === "all" ? "Vuelos registrados" : "Vuelos próximos"}</p>
-            <p className="mt-1 text-3xl font-bold text-white">{totalVuelos.toLocaleString("es-BO")}</p>
-            <p className="mt-2 text-xs text-gray-300">{flightIDFilter || originFilter || destinationFilter ? "Resultado de los filtros actuales." : scope === "all" ? "CSV histórico y vuelos de demostración." : "Solo salidas futuras; los históricos están en Todos."}</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-gray-300">Importados del CSV</p>
-            <p className="mt-1 text-3xl font-bold text-white">{catalogCounts.imported.toLocaleString("es-BO")}</p>
-            <p className="mt-2 text-xs text-gray-400">Registros válidos conservados, incluso históricos.</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-gray-300">Vuelos de demostración</p>
-            <p className="mt-1 text-3xl font-bold text-white">{catalogCounts.demo.toLocaleString("es-BO")}</p>
-            <p className="mt-2 text-xs text-gray-400">Programados para poder probar compras.</p>
-          </div>
-        </div>
-        <p className="mb-5 text-sm text-gray-400">Las horas de salida y llegada se muestran en la zona local de cada aeropuerto. Usa los filtros o «Ir a página» para explorar todo el catálogo.</p>
-
-        <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Tipo de vuelos">
-          <button type="button" onClick={() => { setScope("all"); setCurrentPage(1); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${scope === "all" ? "bg-blue-600 text-white" : "bg-white/5 text-gray-300 hover:bg-white/10"}`}>Todos los vuelos</button>
-          <button type="button" onClick={() => { setScope("upcoming"); setCurrentPage(1); }} className={`rounded-lg px-4 py-2 text-sm font-semibold ${scope === "upcoming" ? "bg-blue-600 text-white" : "bg-white/5 text-gray-300 hover:bg-white/10"}`}>Solo próximos</button>
-        </div>
-
-        <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-          <form className="flex min-w-0 gap-2" onSubmit={(event) => { event.preventDefault(); setFlightIDFilter(flightIDInput.trim()); setCurrentPage(1); }}>
-            <input type="number" min="1" value={flightIDInput} onChange={(event) => setFlightIDInput(event.target.value)} placeholder="ID del vuelo" aria-label="Buscar por ID de vuelo" className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#171b2b] px-3 py-2 text-sm text-white" />
-            <button type="submit" className="rounded-lg bg-blue-600 px-3 text-white" aria-label="Buscar vuelo"><Search className="h-4 w-4" /></button>
-          </form>
-          <select value={originFilter} onChange={(event) => { setOriginFilter(event.target.value); setCurrentPage(1); }} aria-label="Filtrar por origen" className="rounded-lg border border-white/10 bg-[#171b2b] px-3 py-2 text-sm text-white">
-            <option value="">Todos los orígenes</option>
-            {ciudades.map((city: any) => <option key={city.id} value={city.id}>{city.codigo} · {city.pais}</option>)}
-          </select>
-          <select value={destinationFilter} onChange={(event) => { setDestinationFilter(event.target.value); setCurrentPage(1); }} aria-label="Filtrar por destino" className="rounded-lg border border-white/10 bg-[#171b2b] px-3 py-2 text-sm text-white">
-            <option value="">Todos los destinos</option>
-            {ciudades.map((city: any) => <option key={city.id} value={city.id}>{city.codigo} · {city.pais}</option>)}
-          </select>
-          <button type="button" onClick={() => { setFlightIDInput(""); setFlightIDFilter(""); setOriginFilter(""); setDestinationFilter(""); setCurrentPage(1); }} className="rounded-lg border border-white/10 px-3 py-2 text-sm text-gray-300 hover:bg-white/10">Limpiar</button>
-        </div>
-
-        {listError && <div role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">{listError} <button onClick={fetchVuelos} className="ml-2 underline">Reintentar</button></div>}
-        <div className="w-full rounded-xl border border-white/10 overflow-hidden">
-          {loading ? (
-             <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
-          ) : totalVuelos === 0 ? (
-             <div className="p-10 text-center text-gray-500">
-               No hay vuelos que coincidan con estos filtros. Prueba «Todos los vuelos» o limpia la búsqueda.
-             </div>
-          ) : (
-            <>
-              <div className="space-y-3 p-3 xl:hidden">
-                {paginatedVuelos.map((v: any) => <article key={v.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div><p className="text-xs text-gray-400">Vuelo AP {v.id}</p><p className="text-lg font-semibold text-white">{ciudades.find((c: any) => c.id === v.id_origen)?.codigo || "?"} → {ciudades.find((c: any) => c.id === v.id_destino)?.codigo || "?"}</p></div>
-                    <span className="rounded-md bg-white/10 px-2 py-1 text-xs text-gray-200">{flightStates[v.id_estado_vuelo] || "Sin estado"}</span>
-                  </div>
-                  <div className="mt-3 space-y-1 text-sm text-gray-300">
-                    <p><span className="text-gray-500">Sale:</span> {toDate(v.salida_programada, v.id_origen)}</p>
-                    <p><span className="text-gray-500">Llega:</span> {toDate(v.llegada_programada, v.id_destino)}</p>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-gray-400">
-                    <span>{v.demo ? "Demostración" : "CSV importado"}</span>
-                    <button onClick={() => setSelectedVuelo(v)} className="rounded-lg border border-blue-500/30 px-3 py-1.5 text-blue-300 hover:bg-blue-500/20">Ver detalle</button>
-                  </div>
-                </article>)}
+      {showAddModal && createPortal(
+        <div role="dialog" aria-modal="true" aria-label="Programar vuelo" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-navy-950/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 bg-navy-900 px-6 py-5 text-white">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-300">{currentRegion}</p>
+                <h3 className="mt-1 text-xl font-bold text-white">Programar Vuelo</h3>
               </div>
-              <table className="hidden w-full text-sm text-left xl:table">
-                <thead className="text-xs text-gray-400 uppercase bg-white/5 border-b border-white/10">
+              <button type="button" onClick={() => setShowAddModal(false)} aria-label="Cerrar" className="rounded-full p-1.5 text-navy-200 hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-5 p-6">
+              <div className="segmented" role="group" aria-label="Tipo de vuelo">
+                <button type="button" data-active={creationMode === "direct"} onClick={() => { setCreationMode("direct"); setErrorVuelo(null); setStopoverRoute([]); }}>Vuelo Directo</button>
+                <button type="button" data-active={creationMode === "advanced"} onClick={() => { setCreationMode("advanced"); setErrorVuelo(null); setStopoverRoute([]); }}>Avanzado (Escalas)</button>
+              </div>
+
+              {errorVuelo && <div role="alert" className="alert alert-error"><Info className="h-5 w-5 shrink-0" /><p>{errorVuelo}</p></div>}
+
+              {creationMode === "direct" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="org" className="field-label">Origen</label>
+                    <select id="org" className="field" onChange={validateRoute}>
+                      <option value="">Seleccione Origen...</option>
+                      {ciudades.map((c: any) => <option key={c.id} value={c.id}>{c.codigo} - {c.pais}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="dst" className="field-label">Destino</label>
+                    <select id="dst" className="field" onChange={validateRoute}>
+                      <option value="">Seleccione Destino...</option>
+                      {ciudades.map((c: any) => <option key={c.id} value={c.id}>{c.codigo} - {c.pais}</option>)}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="avion" className="field-label">Avión</label>
+                    <select id="avion" className="field">
+                      <option value="">Seleccione Avión...</option>
+                      {aviones.map((a: any) => <option key={a.id} value={a.id}>ID {a.id} · {a.nombre} ({a.fabricante})</option>)}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label htmlFor="fechaOut" className="field-label">Salida Programada (Fecha y Hora)</label>
+                    <input type="datetime-local" id="fechaOut" className="field" />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="field-label">Paso 1: Ciudad de Inicio</label>
+                    <select disabled={stopoverRoute.length > 0} value={stopoverRoute[0] || ""} className="field"
+                      onChange={(e) => { const val = parseInt(e.target.value); if (val) setStopoverRoute([val]); else setStopoverRoute([]); }}>
+                      <option value="">Seleccione Origen Inicial...</option>
+                      {ciudades.map((c: any) => <option key={c.id} value={c.id}>{c.codigo} - {c.pais}</option>)}
+                    </select>
+                  </div>
+
+                  {stopoverRoute.length > 0 && (
+                    <div>
+                      <label className="field-label">
+                        Paso {stopoverRoute.length + 1}: Agregar Siguiente Tramo / Escala desde {cityLabel(ciudades, stopoverRoute[stopoverRoute.length - 1])?.codigo}
+                      </label>
+                      <select key={`next-dest-${stopoverRoute.length}`} className="field" onChange={(e) => { handleAddStopoverCity(e.target.value); e.target.value = ""; }}>
+                        <option value="">+ Seleccionar Destino Conectado...</option>
+                        {getValidNextDestinations(stopoverRoute[stopoverRoute.length - 1]).map((c: any) => <option key={c.id} value={c.id}>{c.codigo} - {c.pais}</option>)}
+                      </select>
+                    </div>
+                  )}
+
+                  {stopoverRoute.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="eyebrow">Ruta Programada ({stopoverRoute.length - 1} Escalas/Tramos)</span>
+                        {stopoverRoute.length > 1 && <button type="button" onClick={handleRemoveLastStopover} className="text-xs font-semibold text-red-600 hover:underline">Quitar Último</button>}
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {stopoverRoute.map((cId, idx) => <div key={cId} className="flex items-center gap-2">
+                          <span className="rounded-lg bg-navy-900 px-2.5 py-1 text-xs font-bold text-white">{cityLabel(ciudades, cId)?.codigo || cId}</span>
+                          {idx < stopoverRoute.length - 1 && <ArrowRight className="h-3.5 w-3.5 text-slate-400" />}
+                        </div>)}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label htmlFor="avion" className="field-label">Avión</label>
+                    <select id="avion" className="field">
+                      <option value="">Seleccione Avión...</option>
+                      {aviones.map((a: any) => <option key={a.id} value={a.id}>ID {a.id} · {a.nombre} ({a.fabricante})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="fechaOut" className="field-label">Salida Inicial (Fecha y Hora)</label>
+                    <input type="datetime-local" id="fechaOut" className="field" />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
+              <button onClick={() => setShowAddModal(false)} disabled={submitting} className="btn-ghost">Cancelar</button>
+              <button id="saveBtn" disabled={submitting} onClick={saveFlights} className="btn-primary">
+                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {submitting ? 'Guardando...' : 'Guardar Vuelo(s)'}
+              </button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
+
+      {selectedVuelo && createPortal(
+        <div role="dialog" aria-modal="true" aria-label="Detalle del Vuelo" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-navy-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="relative bg-navy-900 px-6 py-6 text-white sm:px-8">
+              <button onClick={() => setSelectedVuelo(null)} aria-label="Cerrar" className="absolute right-4 top-4 rounded-full p-1.5 text-navy-200 hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-300">Detalle del Vuelo · AP {selectedVuelo.id}</p>
+              <div className="mt-4 flex items-center justify-between gap-4">
+                <div><p className="text-4xl font-bold text-white">{selectedOrigin?.codigo || "???"}</p><p className="text-sm text-navy-200">{selectedOrigin?.pais || "Desconocido"}</p></div>
+                <div className="flex flex-1 items-center gap-2 px-2" aria-hidden="true"><span className="h-px flex-1 border-t border-dashed border-navy-400" /><Plane className="h-5 w-5 rotate-45 text-gold-300" /><span className="h-px flex-1 border-t border-dashed border-navy-400" /></div>
+                <div className="text-right"><p className="text-4xl font-bold text-white">{selectedDestination?.codigo || "???"}</p><p className="text-sm text-navy-200">{selectedDestination?.pais || "Desconocido"}</p></div>
+              </div>
+            </div>
+            <div className="grid gap-4 p-6 sm:grid-cols-2 sm:p-8">
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="eyebrow mb-3">Horario local de cada aeropuerto</p>
+                <p className="text-xs text-slate-500">Salida Programada</p>
+                <p className="font-semibold text-navy-900">{toDate(selectedVuelo.salida_programada, selectedVuelo.id_origen)}</p>
+                <p className="mt-3 text-xs text-slate-500">Llegada Estimada</p>
+                <p className="font-semibold text-navy-900">{toDate(selectedVuelo.llegada_programada, selectedVuelo.id_destino)}</p>
+              </div>
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-200 p-4">
+                  <p className="eyebrow mb-2">Aeronave</p>
+                  <p className="font-semibold text-navy-900">{aviones.find((a: any) => a.id === selectedVuelo.id_avion)?.nombre || "No asignado"}</p>
+                  <p className="text-xs text-slate-500">{aviones.find((a: any) => a.id === selectedVuelo.id_avion)?.fabricante || "Fabricante desconocido"}</p>
+                </div>
+                <div className="rounded-xl border border-gold-200 bg-gold-50 p-4">
+                  <p className="eyebrow mb-2">Precios Sugeridos</p>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-xs text-slate-500">Regular</p><p className="text-lg font-bold text-navy-900">${precios?.matriz_precios_regular?.[selectedOrigin?.codigo]?.[selectedDestination?.codigo] || "N/A"}</p></div>
+                    <div className="text-right"><p className="text-xs text-slate-500">VIP</p><p className="text-lg font-bold text-gold-700">${precios?.matriz_precios_vip?.[selectedOrigin?.codigo]?.[selectedDestination?.codigo] || "N/A"}</p></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 sm:px-8">
+              <FlightStatusBadge state={selectedVuelo.id_estado_vuelo} />
+              <Link href={`/dashboard/vuelos/${selectedVuelo.id}`} className="btn-ghost btn-sm"><BarChart3 className="h-4 w-4" /> Ver panel del vuelo</Link>
+              <div className="ml-auto flex flex-wrap gap-2">
+                <button onClick={() => setSelectedVuelo(null)} className="btn-secondary">Cerrar</button>
+                {selectedVuelo.id_estado_vuelo < 6 && <button onClick={() => { changeState(selectedVuelo.id, selectedVuelo.id_estado_vuelo + 1); setSelectedVuelo(null); }} className="btn-primary">
+                  Cambiar estado a «{flightStates[selectedVuelo.id_estado_vuelo + 1]}»
+                </button>}
+              </div>
+            </div>
+          </div>
+        </div>, document.body
+      )}
+
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <div className="card card-body bg-navy-900 text-white">
+          <p className="text-sm text-navy-200">{filtersActive ? "Vuelos que coinciden" : scope === "all" ? "Vuelos registrados" : "Vuelos próximos"}</p>
+          <p className="mt-1 text-3xl font-bold text-white">{totalVuelos.toLocaleString("es-BO")}</p>
+          <p className="mt-1 text-xs text-navy-200">{filtersActive ? "Resultado de los filtros actuales." : scope === "all" ? "CSV histórico y vuelos de demostración." : "Solo salidas futuras; los históricos están en Todos."}</p>
+        </div>
+        <div className="card card-body">
+          <p className="text-sm text-slate-500">Importados del CSV</p>
+          <p className="mt-1 text-3xl font-bold text-navy-900">{catalogCounts.imported.toLocaleString("es-BO")}</p>
+          <p className="mt-1 text-xs text-slate-500">Registros válidos conservados, incluso históricos.</p>
+        </div>
+        <div className="card card-body">
+          <p className="text-sm text-slate-500">Vuelos de demostración</p>
+          <p className="mt-1 text-3xl font-bold text-navy-900">{catalogCounts.demo.toLocaleString("es-BO")}</p>
+          <p className="mt-1 text-xs text-slate-500">Programados para poder probar compras.</p>
+        </div>
+      </div>
+
+      <section className="card">
+        <div className="space-y-4 border-b border-slate-100 p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="segmented w-auto" role="group" aria-label="Tipo de vuelos">
+              <button type="button" data-active={scope === "all"} onClick={() => { setScope("all"); setCurrentPage(1); }}>Todos los vuelos</button>
+              <button type="button" data-active={scope === "upcoming"} onClick={() => { setScope("upcoming"); setCurrentPage(1); }}>Solo próximos</button>
+            </div>
+            <p className="flex items-center gap-1.5 text-xs text-slate-500"><CalendarClock className="h-4 w-4" aria-hidden="true" />Horario local de cada aeropuerto</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <form className="flex min-w-0 gap-2" onSubmit={(event) => { event.preventDefault(); setFlightIDFilter(flightIDInput.trim()); setCurrentPage(1); }}>
+              <input type="number" min="1" value={flightIDInput} onChange={(event) => setFlightIDInput(event.target.value)} placeholder="ID del vuelo" aria-label="Buscar por ID de vuelo" className="field min-w-0 flex-1" />
+              <button type="submit" className="btn-primary px-3" aria-label="Buscar vuelo"><Search className="h-4 w-4" /></button>
+            </form>
+            <select value={originFilter} onChange={(event) => { setOriginFilter(event.target.value); setCurrentPage(1); }} aria-label="Filtrar por origen" className="field">
+              <option value="">Todos los orígenes</option>
+              {ciudades.map((city: any) => <option key={city.id} value={city.id}>{city.codigo} · {city.pais}</option>)}
+            </select>
+            <select value={destinationFilter} onChange={(event) => { setDestinationFilter(event.target.value); setCurrentPage(1); }} aria-label="Filtrar por destino" className="field">
+              <option value="">Todos los destinos</option>
+              {ciudades.map((city: any) => <option key={city.id} value={city.id}>{city.codigo} · {city.pais}</option>)}
+            </select>
+            <button type="button" onClick={() => { setFlightIDInput(""); setFlightIDFilter(""); setOriginFilter(""); setDestinationFilter(""); setCurrentPage(1); }} className="btn-secondary">Limpiar</button>
+          </div>
+        </div>
+
+        {listError && <div role="alert" className="alert alert-error m-5">{listError} <button onClick={fetchVuelos} className="font-semibold underline">Reintentar</button></div>}
+        {loading ? (
+          <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-navy-500" /></div>
+        ) : totalVuelos === 0 ? (
+          <div className="p-5"><EmptyState icon={Plane} title="Sin resultados">No hay vuelos que coincidan con estos filtros. Prueba «Todos los vuelos» o limpia la búsqueda.</EmptyState></div>
+        ) : (
+          <>
+            <div className="space-y-3 p-4 xl:hidden">
+              {paginatedVuelos.map((v: any) => <article key={v.id} className="rounded-xl border border-slate-200 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div><p className="text-xs font-semibold text-slate-500">Vuelo AP {v.id}</p><RouteCodes from={cityLabel(ciudades, v.id_origen)?.codigo} to={cityLabel(ciudades, v.id_destino)?.codigo} /></div>
+                  <FlightStatusBadge state={v.id_estado_vuelo} />
+                </div>
+                <div className="mt-3 grid gap-1 text-sm text-slate-600">
+                  <p><span className="text-slate-400">Sale:</span> {toDate(v.salida_programada, v.id_origen)}</p>
+                  <p><span className="text-slate-400">Llega:</span> {toDate(v.llegada_programada, v.id_destino)}</p>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-500">
+                  <span>{v.demo ? "Demostración" : "CSV importado"}</span>
+                  <button onClick={() => setSelectedVuelo(v)} className="btn-secondary btn-sm">Ver detalle</button>
+                </div>
+              </article>)}
+            </div>
+            <div className="hidden overflow-x-auto xl:block">
+              <table className="table-clean">
+                <thead>
                   <tr>
-                    <th className="px-4 py-4">Vuelo</th>
-                    <th className="px-4 py-4">Ruta</th>
-                    <th className="px-4 py-4">Estado</th>
-                    <th className="px-4 py-4">Salida local</th>
-                    <th className="px-4 py-4">Llegada local</th>
-                    <th className="px-4 py-4">Origen de datos</th>
-                    <th className="px-4 py-4">Detalle</th>
+                    <th>Vuelo</th><th>Ruta</th><th>Estado</th><th>Salida local</th><th>Llegada local</th><th>Origen de datos</th><th className="text-right">Detalle</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedVuelos.map((v: any) => (
-                    <tr key={v.id} className="border-b border-white/5 outline-none hover:bg-white/5 transition-colors">
-                      <td className="px-4 py-4 font-semibold">AP {v.id}</td>
-                      <td className="px-4 py-4 whitespace-nowrap font-medium">{ciudades.find((c: any) => c.id === v.id_origen)?.codigo || "?"} → {ciudades.find((c: any) => c.id === v.id_destino)?.codigo || "?"}</td>
-                      <td className="px-4 py-4"><span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-gray-200">{flightStates[v.id_estado_vuelo] || "Sin estado"}</span></td>
-                      <td className="px-4 py-4 text-gray-300">{toDate(v.salida_programada, v.id_origen)}</td>
-                      <td className="px-4 py-4 text-gray-300">{toDate(v.llegada_programada, v.id_destino)}</td>
-                      <td className="px-4 py-4 text-gray-400">{v.demo ? "Demostración" : "CSV importado"}</td>
-                      <td className="px-4 py-4">
-                         <button 
-                           onClick={() => setSelectedVuelo(v)}
-                           aria-label={`Ver detalle del vuelo ${v.id}`}
-                           className="rounded-lg border border-blue-500/30 px-3 py-1.5 text-blue-300 transition hover:bg-blue-500/20"
-                         >
-                           Ver detalle
-                         </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {paginatedVuelos.map((v: any) => <tr key={v.id}>
+                    <td className="whitespace-nowrap font-mono font-semibold text-navy-900">AP {v.id}</td>
+                    <td className="whitespace-nowrap"><RouteCodes from={cityLabel(ciudades, v.id_origen)?.codigo} to={cityLabel(ciudades, v.id_destino)?.codigo} /></td>
+                    <td><FlightStatusBadge state={v.id_estado_vuelo} /></td>
+                    <td>{toDate(v.salida_programada, v.id_origen)}</td>
+                    <td>{toDate(v.llegada_programada, v.id_destino)}</td>
+                    <td className="text-slate-500">{v.demo ? "Demostración" : "CSV importado"}</td>
+                    <td className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Link href={`/boletos?vuelo=${v.id}`} className="btn-ghost btn-sm" aria-label={`Comprar en el vuelo ${v.id}`}><Armchair className="h-4 w-4" /></Link>
+                        <button onClick={() => setSelectedVuelo(v)} aria-label={`Ver detalle del vuelo ${v.id}`} className="btn-secondary btn-sm">Ver detalle</button>
+                      </div>
+                    </td>
+                  </tr>)}
                 </tbody>
               </table>
+            </div>
 
-              {/* PAGINATION CONTROLS */}
-              <div className="p-4 bg-white/5 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <span>Mostrando {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalVuelos)} de {totalVuelos.toLocaleString("es-BO")} vuelos</span>
-                  <span className="mx-2">|</span>
-                  <span>Filas por página:</span>
-                  <select 
-                    value={itemsPerPage} 
-                    onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                    className="bg-white/5 border border-white/10 rounded px-2 py-1 text-white outline-none"
-                  >
-                    <option value={25} className="text-black">25</option>
-                    <option value={50} className="text-black">50</option>
-                    <option value={100} className="text-black">100</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-xs font-semibold text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
-                  >
-                    Anterior
-                  </button>
-
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                      .map((p, idx, arr) => {
-                        const showEllipsis = idx > 0 && p - arr[idx - 1] > 1;
-                        return (
-                          <div key={p} className="flex items-center gap-1">
-                            {showEllipsis && <span className="text-gray-500 text-xs px-1">...</span>}
-                            <button
-                              onClick={() => handlePageChange(p)}
-                              className={`px-3 py-1.5 rounded text-xs font-bold transition ${currentPage === p ? 'bg-blue-600 text-white' : 'bg-white/5 hover:bg-white/10 text-gray-400'}`}
-                            >
-                              {p}
-                            </button>
-                          </div>
-                        );
-                      })
-                    }
-                  </div>
-
-                  <button 
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 text-xs font-semibold text-white disabled:opacity-30 disabled:cursor-not-allowed transition"
-                  >
-                    Siguiente
-                  </button>
-                  <form onSubmit={(event) => { event.preventDefault(); handlePageChange(Number(pageJump)); setPageJump(""); }} className="flex items-center gap-2 text-xs text-gray-300">
-                    <label htmlFor="jump-to-page">Ir a página</label>
-                    <input id="jump-to-page" type="number" min="1" max={totalPages} value={pageJump} onChange={(event) => setPageJump(event.target.value)} className="w-20 rounded border border-white/10 bg-[#171b2b] px-2 py-1.5 text-white" />
-                    <button type="submit" className="rounded bg-white/10 px-2 py-1.5 hover:bg-white/20">Ir</button>
-                  </form>
-                </div>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 p-4 text-xs text-slate-500">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>Mostrando {startIndex + 1}–{Math.min(startIndex + itemsPerPage, totalVuelos)} de {totalVuelos.toLocaleString("es-BO")} vuelos</span>
+                <span className="text-slate-300">|</span>
+                <span>Filas por página:</span>
+                <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-700">
+                  <option value={25}>25</option><option value={50}>50</option><option value={100}>100</option>
+                </select>
               </div>
-            </>
-          )}
-        </div>
-      </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="btn-secondary btn-sm">Anterior</button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                    .map((p, idx, arr) => <div key={p} className="flex items-center gap-1">
+                      {idx > 0 && p - arr[idx - 1] > 1 && <span className="px-1 text-slate-400">...</span>}
+                      <button onClick={() => handlePageChange(p)} aria-current={currentPage === p ? "page" : undefined}
+                        className={`h-8 min-w-8 rounded-lg px-2 font-semibold transition ${currentPage === p ? "bg-navy-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{p}</button>
+                    </div>)}
+                </div>
+                <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="btn-secondary btn-sm">Siguiente</button>
+                <form onSubmit={(event) => { event.preventDefault(); handlePageChange(Number(pageJump)); setPageJump(""); }} className="flex items-center gap-2">
+                  <label htmlFor="jump-to-page">Ir a página</label>
+                  <input id="jump-to-page" type="number" min="1" max={totalPages} value={pageJump} onChange={(event) => setPageJump(event.target.value)} className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-slate-700" />
+                  <button type="submit" className="btn-secondary btn-sm">Ir</button>
+                </form>
+              </div>
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }

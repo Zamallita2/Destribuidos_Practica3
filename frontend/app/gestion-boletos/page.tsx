@@ -5,14 +5,17 @@ import {
   Ticket,
   Search,
   Loader2,
-  ArrowRight,
-  User,
   XCircle,
   CreditCard,
   ChevronDown,
   Plane,
   FileText,
+  RefreshCw,
+  Wallet,
+  Mail,
+  IdCard,
 } from "lucide-react";
+import { EmptyState, PageHeader, RouteCodes, TicketStatusBadge } from "@/components/ui";
 import { downloadBoardingPassPdf } from "@/lib/boardingPassPdf";
 import { translateUiText } from "@/lib/englishUi";
 import { useLanguage } from "@/context/LanguageContext";
@@ -29,6 +32,7 @@ export default function GestionBoletos() {
   const [selectedPass, setSelectedPass] = useState<any>(null);
   const [updating, setUpdating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const fetchData = async () => {
     try {
@@ -140,19 +144,6 @@ export default function GestionBoletos() {
     );
   };
 
-  const statusColors = (estado: string) => {
-    switch (estado) {
-      case "RESERVED":
-        return "bg-yellow-500/20 text-yellow-500 border-yellow-500/50";
-      case "SALED":
-        return "bg-emerald-500/20 text-emerald-400 border-emerald-500/50";
-      case "ANNULLED":
-        return "bg-red-500/20 text-red-500 border-red-500/50";
-      default:
-        return "bg-gray-500/20 text-gray-500 border-gray-500/50";
-    }
-  };
-
   const exportarBoletoPDF = async () => {
     if (!selectedBoleto) return;
     setUpdating(true);
@@ -168,293 +159,155 @@ export default function GestionBoletos() {
 
   if (loading) {
     return (
-      <div className="h-[600px] flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-navy-500" />
       </div>
     );
   }
 
-  const filtered = filterBoletos();
+  const searched = filterBoletos();
+  const filtered = statusFilter === "ALL" ? searched : searched.filter((b: any) => b.estado === statusFilter);
+  const statusFilters = [
+    ["ALL", "Todos"], ["SALED", "Vendidos"], ["RESERVED", "Reservados"], ["REFUNDED", "En reembolso"], ["ANNULLED", "Anulados"],
+  ] as const;
+  const selectedDetails = selectedBoleto ? getFlightDetails(selectedBoleto.id_vuelo) : null;
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-5 duration-500 max-w-7xl mx-auto pb-20">
-      <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <h2 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 flex items-center gap-3">
-            <Ticket className="text-blue-400 w-10 h-10" />
-            Gestión de Boletos
-          </h2>
-          <p className="text-gray-400 mt-2 text-lg">Consulta tus boletos, descarga el boleto visual o abre el pase en una billetera compatible.</p>
-        </div>
+    <div className="fade-up pb-10">
+      <PageHeader icon={Ticket} eyebrow="Mis viajes" title="Gestión de Boletos"
+        subtitle="Consulta tus boletos, descarga el boleto visual o abre el pase en una billetera compatible."
+        actions={<button onClick={() => fetchData()} className="btn-secondary"><RefreshCw className="h-4 w-4" /> Refrescar</button>} />
 
-        <div className="relative min-w-[300px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Buscar número de boleto, pasajero, email o pasaporte..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white placeholder:text-gray-600 focus:border-blue-500 outline-none transition"
-          />
+      <div className="card mb-6 flex flex-wrap items-center gap-3 p-4">
+        <div className="relative min-w-[260px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input type="text" placeholder="Buscar número de boleto, pasajero, email o pasaporte..." aria-label="Buscar boletos" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="field pl-9" />
+        </div>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por estado">
+          {statusFilters.map(([value, label]) => <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={statusFilter === value}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${statusFilter === value ? "border-navy-900 bg-navy-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-navy-300"}`}>
+            {label}
+          </button>)}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 glass-panel p-6 h-[650px] flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-xl uppercase tracking-wider text-gray-300">
-              Todos los Boletos ({filtered.length})
-            </h3>
-            <button
-              onClick={() => fetchData()}
-              className="text-sm text-blue-400 hover:text-blue-300"
-            >
-              Refrescar
-            </button>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <section className="card flex max-h-[720px] flex-col lg:col-span-3">
+          <div className="card-header">
+            <h2 className="section-title">Todos los Boletos ({filtered.length})</h2>
           </div>
-
-          <div className="overflow-y-auto flex-1 pr-2 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
+          <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
             {filtered.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-500 italic border-dashed border-2 border-white/5 rounded-2xl">
-                No se encontraron boletos.
-              </div>
-            ) : (
-              filtered.map((b: any) => {
-                const details = getFlightDetails(b.id_vuelo);
-
-                return (
-                  <div
-                    key={b.id_boleto}
-                    onClick={() => setSelectedBoleto(b)}
-                    className={`p-4 rounded-2xl bg-white/5 border cursor-pointer hover:border-blue-500/50 hover:bg-white/10 transition-all ${
-                      selectedBoleto?.id_boleto === b.id_boleto
-                        ? "border-blue-500 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
-                        : "border-white/10"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center">
-                          <User className="text-gray-400 w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-white text-lg">{b.nombre_pasajero}</p>
-                          <p className="text-xs text-gray-400">{b.email_pasajero}</p>
-                        </div>
-                      </div>
-
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${statusColors(b.estado)}`}>
-                        {b.estado}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-6 text-sm">
-                      <div>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase">Boleto ID</p>
-                        <p className="font-mono text-gray-300">#{b.id_boleto}</p>
-                      </div>
-
-                      {details && (
-                        <div className="flex items-center gap-2">
-                          <div className="text-gray-400 font-medium">{details.org?.codigo}</div>
-                          <ArrowRight className="w-3 h-3 text-gray-600" />
-                          <div className="text-gray-400 font-medium">{details.dst?.codigo}</div>
-                        </div>
-                      )}
-
-                      <div>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase">Costo</p>
-                        <p className="font-bold text-green-400">${b.costo}</p>
-                      </div>
+              <EmptyState icon={Ticket} title="Sin boletos">No se encontraron boletos.</EmptyState>
+            ) : filtered.map((b: any) => {
+              const details = getFlightDetails(b.id_vuelo);
+              const active = selectedBoleto?.id_boleto === b.id_boleto;
+              return <button key={b.id_boleto} type="button" onClick={() => setSelectedBoleto(b)} aria-pressed={active}
+                className={`w-full rounded-xl border p-4 text-left transition hover:border-navy-300 hover:bg-navy-50/50 ${active ? "border-navy-800 bg-navy-50 ring-1 ring-navy-800" : "border-slate-200 bg-white"}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-bold text-gold-300">
+                      {(b.nombre_pasajero || "?").trim().charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-navy-900">{b.nombre_pasajero}</p>
+                      <p className="truncate text-xs text-slate-500">{b.email_pasajero}</p>
                     </div>
                   </div>
-                );
-              })
-            )}
+                  <TicketStatusBadge state={b.estado} />
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-dashed border-slate-200 pt-3 text-sm">
+                  <div><p className="text-[10px] font-semibold uppercase text-slate-400">Boleto ID</p><p className="font-mono text-navy-900">#{b.id_boleto}</p></div>
+                  {details && <RouteCodes from={details.org?.codigo} to={details.dst?.codigo} />}
+                  <div className="ml-auto text-right"><p className="text-[10px] font-semibold uppercase text-slate-400">Costo</p><p className="font-bold text-navy-900">${b.costo}</p></div>
+                </div>
+              </button>;
+            })}
           </div>
-        </div>
+        </section>
 
-        <div className="lg:col-span-1 glass-panel p-6 h-[650px] sticky top-32 overflow-y-auto">
+        <aside className="card h-max lg:sticky lg:top-24 lg:col-span-2">
           {selectedBoleto ? (
-            <div className="animate-in zoom-in duration-300 fade-in">
-              <div className="flex flex-wrap justify-between items-center gap-3 mb-6 border-b border-white/10 pb-4">
-                <h3 className="font-bold text-xl uppercase tracking-wider text-white">
-                  Detalle del Boleto
-                </h3>
-
-                <div className="flex flex-wrap gap-2">
-                {selectedBoleto.estado === "SALED" && <a
-                  href={`/pase/${selectedBoleto.id_boleto}/billetera`}
-                  className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-600/20 px-4 py-2 text-sm font-bold text-emerald-300 hover:bg-emerald-600/30"
-                >Abrir pase para Passbook</a>}
-                {selectedBoleto.estado === "SALED" && <button
-                  onClick={exportarBoletoPDF}
-                  disabled={updating}
-                  className="flex items-center gap-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-600/30 transition-all hover:-translate-y-0.5"
-                >
-                  {updating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <FileText className="w-4 h-4" />
-                  )}
-                  Descargar boleto visual (PDF)
-                </button>}
-                </div>
+            <div className="fade-up">
+              <div className="card-header">
+                <div><p className="eyebrow">Detalle del Boleto</p><p className="font-mono text-lg font-bold text-navy-900">#{selectedBoleto.id_boleto}</p></div>
+                <TicketStatusBadge state={selectedBoleto.estado} />
               </div>
-
-              <div className="space-y-6">
-                {selectedPass && <section aria-label="Vista del pase de abordar" className="overflow-hidden rounded-2xl border border-blue-400/30 bg-gradient-to-br from-slate-800 to-blue-950 p-5 shadow-xl">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300">Aerolíneas Pabón · Pase de abordar</p>
-                  <div className="mt-5 flex items-center justify-between text-3xl font-black text-white"><span>{selectedPass.origen}</span><Plane className="h-6 w-6 text-blue-300" /><span>{selectedPass.destino}</span></div>
-                  <div className="mt-5 grid grid-cols-2 gap-4 border-t border-white/20 pt-4 text-sm">
-                    <div><p className="text-xs text-blue-200">Pasajero</p><p className="font-bold">{selectedPass.pasajero}</p></div>
-                    <div><p className="text-xs text-blue-200">Vuelo</p><p className="font-bold">AP-{selectedPass.vuelo}</p></div>
-                    <div><p className="text-xs text-blue-200">Asiento</p><p className="font-bold">{selectedPass.asiento}</p></div>
-                    <div><p className="text-xs text-blue-200">Puerta</p><p className="font-bold">{selectedPass.puerta}</p></div>
+              <div className="space-y-5 p-5">
+                {selectedPass && <section aria-label="Vista del pase de abordar" className="overflow-hidden rounded-2xl border border-slate-200 shadow-card">
+                  <div className="bg-navy-900 p-5 text-white">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-300">Aerolíneas Pabón · Pase de abordar</p>
+                    <div className="mt-4 flex items-center justify-between text-3xl font-bold"><span>{selectedPass.origen}</span><Plane className="h-6 w-6 rotate-45 text-gold-300" /><span>{selectedPass.destino}</span></div>
                   </div>
-                  <p className="mt-4 text-xs text-blue-100">Sale de {selectedPass.origen} (hora local): {selectedPass.salida_local?.replace("T", " ").slice(0, 16)} · {selectedPass.zona_salida}</p>
-                  <p className="text-xs text-blue-100">Llega a {selectedPass.destino} (hora local): {selectedPass.llegada_local?.replace("T", " ").slice(0, 16)} · {selectedPass.zona_llegada}</p>
-                  <figure className="mt-4 border-t border-white/20 pt-4 text-center"><img src={`/api/boletos/${selectedBoleto.id_boleto}/wallet/qr.png`} width={160} height={160} alt="QR para abrir la guía de descarga del pase" className="mx-auto rounded bg-white p-2" /><figcaption className="mt-2 text-xs">Escanea con la cámara del celular para abrir el pase</figcaption></figure>
-                  <p className="mt-3 text-xs text-blue-100">El QR abre una página para descargar el pase y compartirlo desde Archivos a Passbook. Usa la cámara del celular, no el lector de códigos de la app. Ambos dispositivos deben estar en la misma red.</p>
-                  <QRNetworkInfo />
+                  <dl className="grid grid-cols-2 gap-4 p-5 text-sm">
+                    <div><dt className="text-xs text-slate-500">Pasajero</dt><dd className="font-semibold text-navy-900">{selectedPass.pasajero}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Vuelo</dt><dd className="font-semibold text-navy-900">AP-{selectedPass.vuelo}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Asiento</dt><dd className="font-semibold text-navy-900">{selectedPass.asiento}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Puerta</dt><dd className="font-semibold text-navy-900">{selectedPass.puerta}</dd></div>
+                  </dl>
+                  <div className="space-y-1 px-5 pb-4 text-xs text-slate-600">
+                    <p>Sale de {selectedPass.origen} (hora local): {selectedPass.salida_local?.replace("T", " ").slice(0, 16)} · {selectedPass.zona_salida}</p>
+                    <p>Llega a {selectedPass.destino} (hora local): {selectedPass.llegada_local?.replace("T", " ").slice(0, 16)} · {selectedPass.zona_llegada}</p>
+                  </div>
+                  <figure className="border-t border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+                    <img src={`/api/boletos/${selectedBoleto.id_boleto}/wallet/qr.png`} width={150} height={150} alt="QR para abrir la guía de descarga del pase" className="mx-auto rounded-xl bg-white p-2 shadow-card" />
+                    <figcaption className="mt-2 text-xs text-slate-600">Escanea con la cámara del celular para abrir el pase</figcaption>
+                    <p className="mt-2 text-xs text-slate-500">El QR abre una página para descargar el pase y compartirlo desde Archivos a Passbook. Usa la cámara del celular, no el lector de códigos de la app. Ambos dispositivos deben estar en la misma red.</p>
+                    <QRNetworkInfo />
+                  </figure>
                 </section>}
-                <div>
-                  <label className="text-[10px] uppercase text-gray-500 font-bold tracking-widest block mb-1">
-                    Nombre
-                  </label>
-                  <p className="text-lg font-bold">{selectedBoleto.nombre_pasajero}</p>
-                </div>
+
+                {selectedBoleto.estado === "SALED" && <div className="grid gap-2 sm:grid-cols-2">
+                  <button onClick={exportarBoletoPDF} disabled={updating} className="btn-primary">
+                    {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Descargar boleto visual (PDF)
+                  </button>
+                  <a href={`/pase/${selectedBoleto.id_boleto}/billetera`} className="btn-gold"><Wallet className="h-4 w-4" /> Abrir pase para Passbook</a>
+                </div>}
 
                 <div>
-                  <label className="text-[10px] uppercase text-gray-500 font-bold tracking-widest block mb-1">
-                    Datos de Contacto e Identificación
-                  </label>
-                  <p className="text-sm text-gray-300">Email: {selectedBoleto.email_pasajero}</p>
-                  <p className="text-sm text-gray-300">Pasaporte: {selectedBoleto.pasaporte}</p>
+                  <p className="eyebrow mb-1">Nombre</p>
+                  <p className="text-lg font-bold text-navy-900">{selectedBoleto.nombre_pasajero}</p>
+                  <p className="eyebrow mb-1 mt-4">Datos de Contacto e Identificación</p>
+                  <p className="flex items-center gap-2 text-sm text-slate-600"><Mail className="h-4 w-4 text-slate-400" /> Email: {selectedBoleto.email_pasajero}</p>
+                  <p className="mt-1 flex items-center gap-2 text-sm text-slate-600"><IdCard className="h-4 w-4 text-slate-400" /> Pasaporte: {selectedBoleto.pasaporte}</p>
                 </div>
 
-                <div className="h-px w-full bg-white/10 my-4" />
-
-                {getFlightDetails(selectedBoleto.id_vuelo) && (
-                  <div className="bg-white/5 p-4 rounded-xl border border-white/10 space-y-4">
-                    <p className="text-[10px] uppercase text-blue-400 font-bold tracking-widest block">
-                      Información del Vuelo
-                    </p>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-2xl font-bold">
-                          {getFlightDetails(selectedBoleto.id_vuelo)?.org?.codigo}
-                        </p>
-                        <p className="text-xs text-gray-400 line-clamp-1 max-w-[80px]">
-                          {getFlightDetails(selectedBoleto.id_vuelo)?.org?.pais}
-                        </p>
-                      </div>
-
-                      <div className="flex-1 px-4 flex flex-col items-center">
-                        <p className="text-[10px] text-gray-500">
-                          {selectedBoleto.tiempo_de_viaje} hrs
-                        </p>
-                        <div className="w-full h-px bg-white/20 relative my-2">
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-1">
-                            <Plane className="w-3 h-3 text-blue-400" />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <p className="text-2xl font-bold">
-                          {getFlightDetails(selectedBoleto.id_vuelo)?.dst?.codigo}
-                        </p>
-                        <p className="text-xs text-gray-400 line-clamp-1 max-w-[80px]">
-                          {getFlightDetails(selectedBoleto.id_vuelo)?.dst?.pais}
-                        </p>
-                      </div>
+                {selectedDetails && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="eyebrow mb-3">Información del Vuelo</p>
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-2xl font-bold text-navy-900">{selectedDetails.org?.codigo}</p><p className="max-w-[90px] truncate text-xs text-slate-500">{selectedDetails.org?.pais}</p></div>
+                    <div className="flex flex-1 flex-col items-center px-3">
+                      <p className="text-[10px] text-slate-500">{selectedBoleto.tiempo_de_viaje} hrs</p>
+                      <div className="my-1 flex w-full items-center gap-1" aria-hidden="true"><span className="h-px flex-1 border-t border-dashed border-slate-300" /><Plane className="h-3.5 w-3.5 rotate-45 text-gold-500" /><span className="h-px flex-1 border-t border-dashed border-slate-300" /></div>
                     </div>
-
-                    <div className="flex justify-between pt-2">
-                      <div>
-                        <p className="text-[10px] text-gray-500">Asiento</p>
-                        <p className="font-bold text-white">#{selectedBoleto.id_asiento}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-gray-500">Precio Pagado</p>
-                        <p className="font-bold text-green-400">${selectedBoleto.costo}</p>
-                      </div>
-                    </div>
+                    <div className="text-right"><p className="text-2xl font-bold text-navy-900">{selectedDetails.dst?.codigo}</p><p className="max-w-[90px] truncate text-xs text-slate-500">{selectedDetails.dst?.pais}</p></div>
                   </div>
-                )}
+                  <div className="mt-3 flex justify-between border-t border-slate-200 pt-3">
+                    <div><p className="text-[10px] text-slate-500">Asiento</p><p className="font-bold text-navy-900">#{selectedBoleto.id_asiento}</p></div>
+                    <div className="text-right"><p className="text-[10px] text-slate-500">Precio Pagado</p><p className="font-bold text-navy-900">${selectedBoleto.costo}</p></div>
+                  </div>
+                </div>}
 
-                <div className="pt-6 border-t border-white/10 mt-6">
-                  <p className="text-[10px] uppercase text-gray-500 font-bold tracking-widest block mb-4">
-                    Acciones de Estado
-                  </p>
-
-                  <div className="flex flex-col gap-3">
-                    <button
-                      onClick={() => changeTicketState(selectedBoleto.id_boleto, "RESERVED")}
-                      disabled={updating || selectedBoleto.estado === "RESERVED"}
-                      className={`py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition border ${
-                        selectedBoleto.estado === "RESERVED"
-                          ? "bg-yellow-500/20 text-yellow-500 border-yellow-500/50 cursor-not-allowed hidden"
-                          : "bg-transparent border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10"
-                      }`}
-                    >
-                      {updating ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                      Mover a Reserva
-                    </button>
-
-                    <button
-                      onClick={() => changeTicketState(selectedBoleto.id_boleto, "SALED")}
-                      disabled={updating || selectedBoleto.estado === "SALED"}
-                      className={`py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg ${
-                        selectedBoleto.estado === "SALED"
-                          ? "bg-emerald-600/50 text-white cursor-not-allowed border-emerald-500/50 hidden"
-                          : "bg-emerald-600 hover:bg-emerald-500 text-white border-transparent"
-                      }`}
-                    >
-                      {updating ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <CreditCard className="w-4 h-4" />
-                      )}
-                      Confirmar Compra
-                    </button>
-
-                    <button
-                      onClick={() => changeTicketState(selectedBoleto.id_boleto, "ANNULLED")}
-                      disabled={updating || selectedBoleto.estado === "ANNULLED"}
-                      className={`py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition border ${
-                        selectedBoleto.estado === "ANNULLED"
-                          ? "bg-red-500/20 text-red-500 border-red-500/50 cursor-not-allowed hidden"
-                          : "bg-transparent border-red-500/50 text-red-500 hover:bg-red-500/10"
-                      }`}
-                    >
-                      {updating ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <XCircle className="w-4 h-4" />
-                      )}
-                      Anular Boleto
-                    </button>
+                <div className="border-t border-slate-100 pt-4">
+                  <p className="eyebrow mb-3">Acciones de Estado</p>
+                  <div className="grid gap-2">
+                    {selectedBoleto.estado !== "SALED" && <button onClick={() => changeTicketState(selectedBoleto.id_boleto, "SALED")} disabled={updating} className="btn-success">
+                      {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Confirmar Compra
+                    </button>}
+                    {selectedBoleto.estado !== "RESERVED" && <button onClick={() => changeTicketState(selectedBoleto.id_boleto, "RESERVED")} disabled={updating} className="btn-secondary">
+                      {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronDown className="h-4 w-4" />} Mover a Reserva
+                    </button>}
+                    {selectedBoleto.estado !== "ANNULLED" && <button onClick={() => changeTicketState(selectedBoleto.id_boleto, "ANNULLED")} disabled={updating} className="btn-danger">
+                      {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Anular Boleto
+                    </button>}
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="h-full flex flex-col justify-center items-center text-center opacity-50 border-2 border-dashed border-white/10 rounded-2xl p-6">
-              <Ticket className="w-16 h-16 text-gray-600 mb-4" />
-              <h4 className="text-xl font-bold mb-2">Ningún Boleto Seleccionado</h4>
-              <p className="text-gray-400 text-sm">
-                Haz clic en un boleto de la lista de la izquierda para ver los detalles y actualizar su estado.
-              </p>
-            </div>
+            <div className="p-5"><EmptyState icon={Ticket} title="Ningún Boleto Seleccionado">Haz clic en un boleto de la lista de la izquierda para ver los detalles y actualizar su estado.</EmptyState></div>
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowRight, Search, Activity, Check, MapPin, Loader2 } from "lucide-react";
+import { Search, Activity, MapPin, Loader2, Map as MapIcon, Clock, DollarSign, Plane, ArrowLeftRight } from "lucide-react";
+import { EmptyState, PageHeader } from "@/components/ui";
 
 interface Ciudad {
   id: number;
@@ -71,185 +72,108 @@ export default function DijkstraSugerencias() {
 
   const currentRoute = resultados && resultados.length > activeTab ? resultados[activeTab] : null;
 
+  const money = (value: number) => `$${Math.round(value).toLocaleString("es-BO")}`;
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in slide-in-from-bottom-5 fade-in duration-500">
-      <div>
-        <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 mb-2">Sugeridor de Rutas Inteligente</h2>
-        <p className="text-gray-400">Implementación de Algoritmo K-Shortest Paths (Dijkstra) para obtener el Top 3 de la ruta óptima minimizando costo o tiempo de vuelo.</p>
-      </div>
+    <div className="fade-up space-y-6">
+      <PageHeader icon={MapIcon} eyebrow="Planificador" title="Sugeridor de Rutas Inteligente"
+        subtitle="Implementación de Algoritmo K-Shortest Paths (Dijkstra) para obtener el Top 3 de la ruta óptima minimizando costo o tiempo de vuelo." />
 
-      <div className="glass-panel p-6 flex flex-col md:flex-row gap-6">
-        <div className="flex-1 space-y-4">
+      <section className="card card-body">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-end">
           <div>
-            <label className="text-sm font-semibold text-gray-400 flex items-center gap-2 mb-1">
-              <MapPin className="w-4 h-4 text-rose-400" />
-              Aeropuerto Origen
-            </label>
-            <select value={origen} onChange={e=>setOrigen(e.target.value)} className="w-full glass-card p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white appearance-none cursor-pointer">
-              <option value="" className="text-black">Seleccione Origen...</option>
-              {ciudades.map(c => (
-                <option key={c.codigo} value={c.codigo} className="text-black">{c.codigo} - {c.pais}</option>
-              ))}
+            <label htmlFor="route-origin" className="field-label flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Aeropuerto Origen</label>
+            <select id="route-origin" value={origen} onChange={e => setOrigen(e.target.value)} className="field">
+              <option value="">Seleccione Origen...</option>
+              {ciudades.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} - {c.pais}</option>)}
             </select>
           </div>
+          <button type="button" aria-label="Intercambiar origen y destino" onClick={() => { setOrigen(destino); setDestino(origen); }}
+            className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-navy-700 shadow-sm transition hover:bg-navy-50 lg:mb-0.5">
+            <ArrowLeftRight className="h-4 w-4" />
+          </button>
           <div>
-            <label className="text-sm font-semibold text-gray-400 flex items-center gap-2 mb-1">
-              <MapPin className="w-4 h-4 text-blue-400" />
-              Aeropuerto Destino
-            </label>
-            <select value={destino} onChange={e=>setDestino(e.target.value)} className="w-full glass-card p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white appearance-none cursor-pointer">
-              <option value="" className="text-black">Seleccione Destino...</option>
-              {ciudades.map(c => (
-                <option key={c.codigo} value={c.codigo} className="text-black">{c.codigo} - {c.pais}</option>
-              ))}
+            <label htmlFor="route-destination" className="field-label flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Aeropuerto Destino</label>
+            <select id="route-destination" value={destino} onChange={e => setDestino(e.target.value)} className="field">
+              <option value="">Seleccione Destino...</option>
+              {ciudades.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} - {c.pais}</option>)}
             </select>
           </div>
         </div>
-
-        <div className="flex-1 space-y-4">
-           <div>
-            <label className="text-sm font-semibold text-gray-400 mb-1 block">Asiento Deseado</label>
-            <div className="flex bg-[#0f111a] rounded-xl p-1 border border-white/5">
-              <button 
-                onClick={()=>setClase("regular")} 
-                className={`flex-1 p-2 rounded-lg text-sm font-medium transition-all duration-300 ${clase === 'regular' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' : 'text-gray-400 hover:text-white'}`}
-              >
-                Regular
-              </button>
-              <button 
-                onClick={()=>setClase("vip")} 
-                className={`flex-1 p-2 rounded-lg text-sm font-medium transition-all duration-300 ${clase === 'vip' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25' : 'text-gray-400 hover:text-white'}`}
-              >
-                Primera Clase
-              </button>
-            </div>
-          </div>
-
+        <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
           <div>
-            <label className="text-sm font-semibold text-gray-400 mb-1 block">Criterio de Optimización</label>
-            <div className="flex bg-[#0f111a] rounded-xl p-1 border border-white/5">
-              <button 
-                onClick={()=>setCriterio("tiempo")} 
-                className={`flex-1 p-2 rounded-lg text-sm font-medium transition-all duration-300 ${criterio === 'tiempo' ? 'bg-emerald-600/80 text-white shadow-lg shadow-emerald-500/25' : 'text-gray-400 hover:text-white'}`}
-              >
-                Menor Tiempo
-              </button>
-              <button 
-                onClick={()=>setCriterio("costo")} 
-                className={`flex-1 p-2 rounded-lg text-sm font-medium transition-all duration-300 ${criterio === 'costo' ? 'bg-orange-600/80 text-white shadow-lg shadow-orange-500/25' : 'text-gray-400 hover:text-white'}`}
-              >
-                Menor Costo
-              </button>
+            <p className="field-label">Asiento Deseado</p>
+            <div className="segmented" role="group" aria-label="Asiento Deseado">
+              <button type="button" data-active={clase === "regular"} onClick={() => setClase("regular")}>Regular</button>
+              <button type="button" data-active={clase === "vip"} onClick={() => setClase("vip")}>Primera Clase</button>
             </div>
           </div>
+          <div>
+            <p className="field-label">Criterio de Optimización</p>
+            <div className="segmented" role="group" aria-label="Criterio de Optimización">
+              <button type="button" data-active={criterio === "tiempo"} onClick={() => setCriterio("tiempo")}>Menor Tiempo</button>
+              <button type="button" data-active={criterio === "costo"} onClick={() => setCriterio("costo")}>Menor Costo</button>
+            </div>
+          </div>
+          <button onClick={simulateDijkstra} disabled={!origen || !destino || loading || origen === destino} className="btn-gold btn-lg">
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+            {loading ? "Procesando Grafo..." : "Buscar Top 3 Rutas"}
+          </button>
         </div>
-      </div>
+      </section>
 
-      <div className="flex justify-center">
-        <button 
-          onClick={simulateDijkstra}
-          disabled={!origen || !destino || loading || origen === destino}
-          className="btn-primary w-full max-w-sm flex justify-center gap-2 items-center text-lg shadow-[0_0_20px_rgba(59,130,246,0.4)] disabled:opacity-50 disabled:cursor-not-allowed group"
-        >
-          {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Search className="w-5 h-5 group-hover:scale-110 transition-transform" />
-          )}
-          {loading ? "Procesando Grafo..." : "Buscar Top 3 Rutas"}
-        </button>
-      </div>
+      {resultados && (resultados.length === 0 ? (
+        <EmptyState icon={Activity} title="Sin Rutas Posibles">No hemos podido encontrar una ruta que conecte estos destinos matemáticamente en estas condiciones.</EmptyState>
+      ) : (
+        <section className="space-y-5">
+          <h2 className="section-title">Rutas Óptimas (Top {resultados.length})</h2>
+          <div className="grid gap-3 md:grid-cols-3" role="tablist" aria-label="Rutas encontradas">
+            {resultados.map((route, idx) => <button key={idx} type="button" role="tab" aria-selected={activeTab === idx} onClick={() => setActiveTab(idx)}
+              className={`rounded-2xl border bg-white p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:shadow-lift ${activeTab === idx ? "border-navy-800 ring-2 ring-navy-800" : "border-slate-200"}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className={`badge ${idx === 0 ? "badge-gold" : "badge-slate"}`}>{idx === 0 ? "Ruta Óptima" : `Alterna ${idx}`}</span>
+                <span className="text-xs text-slate-500">{route.ruta.length - 2 <= 0 ? "Directo" : `${route.ruta.length - 2} escala(s)`}</span>
+              </div>
+              <p className="mt-3 truncate font-mono text-sm font-semibold text-navy-900">{route.ruta.join(" → ")}</p>
+              <div className="mt-3 flex items-end justify-between">
+                <span className="text-2xl font-bold text-navy-900">{money(route.costo)}</span>
+                <span className="flex items-center gap-1 text-sm font-semibold text-slate-600"><Clock className="h-4 w-4" />{route.tiempo} Hrs</span>
+              </div>
+            </button>)}
+          </div>
 
-      {resultados && (
-        <div className="glass-panel p-2 md:p-6 animate-in zoom-in-95 duration-500 relative border-t-2 border-t-blue-500 min-h-[400px]">
-           <div className="absolute top-0 right-0 p-8 md:p-34 opacity-5 pointer-events-none">
-             <Activity className="w-48 h-48 md:w-64 md:h-64" />
-           </div>
-           
-           {resultados.length === 0 ? (
-             <div className="flex flex-col items-center justify-center py-12 text-center">
-               <Activity className="w-16 h-16 text-rose-500/50 mb-4" />
-               <h3 className="text-2xl font-bold text-white mb-2">Sin Rutas Posibles</h3>
-               <p className="text-gray-400">No hemos podido encontrar una ruta que conecte estos destinos matemáticamente en estas condiciones.</p>
-             </div>
-           ) : (
-             <>
-               <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6 relative z-10 px-2 lg:px-6">
-                 <h3 className="text-xl md:text-2xl font-bold flex items-center gap-3">
-                   <Check className="text-emerald-400 w-8 h-8 p-1 bg-emerald-400/20 rounded-full" />
-                   Rutas Óptimas (Top {resultados.length})
-                 </h3>
-                 
-                 {/* Tabs para las 3 rutas */}
-                 <div className="flex bg-[#0f111a]/80 backdrop-blur-md rounded-xl p-1 border border-white/10 shadow-lg">
-                   {resultados.map((_, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setActiveTab(idx)}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${activeTab === idx ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                      >
-                        {idx === 0 ? "Ruta Óptima" : `Alterna ${idx}`}
-                      </button>
-                   ))}
-                 </div>
-               </div>
-
-               {currentRoute && (
-                 <div className="animate-in fade-in slide-in-from-right-4 duration-500 p-2 md:p-6">
-                    <div className="flex flex-wrap items-center justify-center gap-y-8 mb-12 relative w-full px-4 pt-10">
-                       <div className="absolute top-16 left-0 w-full h-[2px] bg-gradient-to-r from-blue-500/10 via-blue-500/40 to-purple-500/10 z-0" />
-                       
-                       {currentRoute.ruta.map((nodo: string, i: number) => (
-                         <div key={i} className="relative z-10 flex flex-col items-center flex-1 min-w-[70px]">
-                           <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl flex items-center justify-center font-black shadow-lg mb-3 ${
-                             i === 0 || i === currentRoute.ruta.length - 1 
-                             ? 'bg-blue-600/20 border-2 border-blue-400 text-white shadow-blue-500/30' 
-                             : 'bg-[#0f111a] border border-white/20 text-gray-300'
-                           }`}>
-                             {nodo}
-                           </div>
-                           <span className="text-xs uppercase tracking-widest font-bold text-gray-400">
-                             {i === 0 ? "Origen" : i === currentRoute.ruta.length -1 ? "Destino" : "Escala"}
-                           </span>
-                           {i < currentRoute.ruta.length - 1 && (
-                             <div className="absolute top-6 left-[calc(50%+1.5rem)] w-[calc(100%-3rem)] md:left-[calc(50%+2rem)] md:w-[calc(100%-4rem)] hidden md:flex flex-col items-center text-xs text-blue-300/80 -translate-y-6">
-                                {/* Información de vuelo intermedio en hover/desktop */}
-                                <span className="bg-[#0f111a] px-2 rounded-full border border-blue-500/30 shadow-lg relative z-20 py-0.5 text-[10px]">
-                                   {criterio === 'costo' ? `$${currentRoute.vuelos[i].cost}` : `${currentRoute.vuelos[i].time} Hrs`}
-                                </span>
-                             </div>
-                           )}
-                         </div>
-                       ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       <div className="bg-gradient-to-br from-indigo-900/40 to-[#0f111a] border border-indigo-500/20 p-5 rounded-2xl flex items-center justify-between hover:border-indigo-500/50 transition-colors">
-                         <div className="flex flex-col">
-                           <span className="text-gray-400 font-bold uppercase text-[10px] tracking-wider mb-1">Costo Total Estimado</span>
-                           <span className="text-xs text-indigo-300/80">{clase === 'vip' ? 'Primera Clase' : 'Clase Regular'}</span>
-                         </div>
-                         <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
-                           ${currentRoute.costo}
-                         </span>
-                       </div>
-
-                       <div className="bg-gradient-to-br from-emerald-900/40 to-[#0f111a] border border-emerald-500/20 p-5 rounded-2xl flex items-center justify-between hover:border-emerald-500/50 transition-colors">
-                         <div className="flex flex-col">
-                           <span className="text-gray-400 font-bold uppercase text-[10px] tracking-wider mb-1">Tiempo de Viaje Estimado</span>
-                           <span className="text-xs text-emerald-300/80">Incluyendo escalas</span>
-                         </div>
-                         <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">
-                           {currentRoute.tiempo} Hrs
-                         </span>
-                       </div>
-                    </div>
-                 </div>
-               )}
-             </>
-           )}
-        </div>
-      )}
+          {currentRoute && <div className="card overflow-hidden">
+            <div className="grid gap-px bg-slate-200 sm:grid-cols-2">
+              <div className="flex items-center justify-between bg-white p-5">
+                <div><p className="eyebrow">Costo Total Estimado</p><p className="text-xs text-slate-500">{clase === 'vip' ? 'Primera Clase' : 'Clase Regular'}</p></div>
+                <p className="flex items-center text-3xl font-bold text-navy-900"><DollarSign className="h-6 w-6 text-gold-500" />{Math.round(currentRoute.costo).toLocaleString("es-BO")}</p>
+              </div>
+              <div className="flex items-center justify-between bg-white p-5">
+                <div><p className="eyebrow">Tiempo de Viaje Estimado</p><p className="text-xs text-slate-500">Incluyendo escalas</p></div>
+                <p className="text-3xl font-bold text-navy-900">{currentRoute.tiempo} Hrs</p>
+              </div>
+            </div>
+            <ol className="relative space-y-0 p-5 sm:p-6" aria-label="Itinerario">
+              {currentRoute.ruta.map((nodo: string, i: number) => {
+                const last = i === currentRoute.ruta.length - 1;
+                const leg = currentRoute.vuelos[i];
+                return <li key={i} className="relative flex gap-4 pb-6 last:pb-0">
+                  {!last && <span aria-hidden="true" className="absolute left-5 top-10 h-[calc(100%-2.5rem)] w-px border-l-2 border-dashed border-navy-200" />}
+                  <span className={`z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === 0 || last ? "bg-navy-900 text-gold-300" : "border-2 border-navy-200 bg-white text-navy-700"}`}>{nodo}</span>
+                  <div className="min-w-0 flex-1 pt-1">
+                    <p className="text-sm font-semibold text-navy-900">{nodo} <span className="ml-1 text-xs font-medium uppercase tracking-wide text-slate-400">{i === 0 ? "Origen" : last ? "Destino" : "Escala"}</span></p>
+                    {!last && leg && <p className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                      <span className="flex items-center gap-1"><Plane className="h-3.5 w-3.5 rotate-90 text-gold-500" /> {leg.salida} → {leg.llegada}</span>
+                      <span className="badge badge-slate">{money(leg.cost)}</span>
+                      <span className="badge badge-slate">{leg.time} Hrs</span>
+                    </p>}
+                  </div>
+                </li>;
+              })}
+            </ol>
+          </div>}
+        </section>
+      ))}
     </div>
   );
 }

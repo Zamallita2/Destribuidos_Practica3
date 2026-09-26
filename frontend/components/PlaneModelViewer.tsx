@@ -31,7 +31,7 @@ class ModelErrorBoundary extends React.Component<
 
   render() {
     return this.state.failed
-      ? <p className="flex h-full items-center justify-center text-sm text-gray-400">Vista 3D no disponible. Puedes continuar con la compra.</p>
+      ? <p className="flex h-full items-center justify-center text-sm text-slate-500">Vista 3D no disponible. Puedes continuar con la compra.</p>
       : this.props.children;
   }
 }
@@ -67,13 +67,13 @@ export default function PlaneModelViewer({ aircraftName }: { aircraftName?: stri
   if (!isClient) return null;
 
   if (!modelId) {
-    return <div className="flex h-[120px] items-center justify-center rounded-3xl border border-white/5 bg-white/5 text-sm text-gray-400">Vista 3D no disponible para este modelo. Puedes continuar con la compra.</div>;
+    return <div className="flex h-[120px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-sm text-slate-500">Vista 3D no disponible para este modelo. Puedes continuar con la compra.</div>;
   }
 
   return (
-    <div className="w-full h-[300px] bg-gradient-to-b from-blue-900/10 to-transparent rounded-3xl border border-white/5 relative overflow-hidden group">
+    <div className="w-full h-[300px] rounded-2xl bg-gradient-to-b from-navy-50 to-white border border-slate-200 relative overflow-hidden group">
       <div className="absolute top-4 left-6 z-10">
-         <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400 opacity-50">Vista Previa 3D</h4>
+         <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-navy-500">Vista Previa 3D</h4>
       </div>
       
       <ModelErrorBoundary model={aircraftName || ""}>
@@ -100,7 +100,7 @@ export default function PlaneModelViewer({ aircraftName }: { aircraftName?: stri
       </Canvas>
       </ModelErrorBoundary>
 
-      <div className="absolute bottom-4 right-6 flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase pointer-events-none group-hover:opacity-0 transition-opacity">
+      <div className="absolute bottom-4 right-6 flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase pointer-events-none group-hover:opacity-0 transition-opacity">
         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Interactivo
       </div>
     </div>

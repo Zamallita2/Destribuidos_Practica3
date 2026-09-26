@@ -44,51 +44,37 @@ export default function LogoUploader() {
   };
 
   return (
-    <div className="glass-panel p-8 max-w-2xl mx-auto w-full mt-10">
-      <h3 className="text-2xl font-bold font-heading mb-2">Personaliza tu Aerolínea</h3>
-      <p className="text-gray-400 mb-6 text-sm">Sube aquí el logotipo corporativo para visualizarlo en los recibos y el portal principal.</p>
-      
+    <section className="card card-body w-full">
+      <h2 className="section-title">Personaliza tu Aerolínea</h2>
+      <p className="section-subtitle mb-5">Sube aquí el logotipo corporativo para visualizarlo en los recibos y el portal principal.</p>
+
       <form
-        className={`relative w-full h-64 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${
-          dragActive ? "border-blue-500 bg-blue-500/10" : "border-gray-600 hover:border-gray-500 bg-white/5"
+        className={`relative flex h-64 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed transition ${
+          dragActive ? "border-navy-500 bg-navy-50" : "border-slate-300 bg-slate-50 hover:border-navy-300"
         }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
       >
-        <input
-          type="file"
-          id="file-upload"
-          className="hidden"
-          accept="image/*"
-          onChange={handleChange}
-        />
-        
+        <input type="file" id="file-upload" className="hidden" accept="image/*" onChange={handleChange} />
+
         {uploaded ? (
-          <div className="flex flex-col items-center animate-in zoom-in duration-300">
-            <div className="w-24 h-24 rounded-2xl overflow-hidden mb-4 shadow-[0_0_20px_rgba(59,130,246,0.3)] bg-white/10 p-2 border border-white/10">
-                <img src={uploaded} alt="Logo de Aerolínea" className="w-full h-full object-contain" />
+          <div className="fade-up flex flex-col items-center">
+            <div className="mb-4 h-24 w-24 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-card">
+              <img src={uploaded} alt="Logo de Aerolínea" className="h-full w-full object-contain" />
             </div>
-            <div className="flex items-center gap-2 text-emerald-400 font-medium">
-              <Check className="w-5 h-5" />
-              Logo Asignado
-            </div>
+            <div className="flex items-center gap-2 font-medium text-emerald-700"><Check className="h-5 w-5" /> Logo Asignado</div>
           </div>
         ) : (
-          <label htmlFor="file-upload" className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
-            <div className="p-4 bg-blue-500/10 text-blue-400 rounded-full mb-4">
-              <UploadCloud className="w-8 h-8" />
-            </div>
-            <p className="font-medium text-lg">Arrastra tu logo aquí</p>
-            <p className="text-sm text-gray-400 mt-2">Formatos: PNG, JPG, SVG</p>
-            
-            <div className="mt-6 px-6 py-2 bg-white/10 rounded-full font-medium hover:bg-white/20 transition-colors">
-              Explorar archivos
-            </div>
+          <label htmlFor="file-upload" className="flex h-full w-full cursor-pointer flex-col items-center justify-center">
+            <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-navy-600 shadow-card"><UploadCloud className="h-7 w-7" /></span>
+            <p className="font-semibold text-navy-900">Arrastra tu logo aquí</p>
+            <p className="mt-1 text-sm text-slate-500">Formatos: PNG, JPG, SVG</p>
+            <span className="btn-secondary btn-sm mt-5">Explorar archivos</span>
           </label>
         )}
       </form>
-    </div>
+    </section>
   );
 }

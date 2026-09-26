@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, DatabaseZap, FileSpreadsheet, Loader2, UploadCloud, AlertTriangle } from "lucide-react";
 import { translateUiText } from "@/lib/englishUi";
 import { useLanguage } from "@/context/LanguageContext";
+import { KpiCard, PageHeader } from "@/components/ui";
 
 type FileKey = "dataset" | "matrices" | "travel_time" | "economy_fares" | "first_class_fares";
 type InputJob = {
@@ -110,71 +111,83 @@ export default function EntradasPage() {
   const selectedCount = Object.values(files).filter(Boolean).length;
 
   return (
-    <div className="space-y-8 pb-12">
-      <div>
-        <h2 className="text-3xl font-bold text-gradient flex items-center gap-3"><DatabaseZap className="w-8 h-8 text-blue-400" /> Datos de entrada</h2>
-        <p className="text-gray-400 mt-2 max-w-3xl">Carga un dataset nuevo, una matriz, varias matrices o todos los archivos. El sistema combinará lo nuevo con los archivos activos y validará el resultado antes de reemplazar los datos.</p>
-      </div>
+    <div className="fade-up space-y-6">
+      <PageHeader icon={DatabaseZap} eyebrow="Operación" title="Datos de entrada"
+        subtitle="Carga un dataset nuevo, una matriz, varias matrices o todos los archivos. El sistema combinará lo nuevo con los archivos activos y validará el resultado antes de reemplazar los datos." />
 
-      <section className="glass-panel p-6">
-        <h3 className="font-semibold text-xl mb-4">Datos activos</h3>
+      <section>
+        <h2 className="section-title mb-3">Datos activos</h2>
         {current ? (
-          <><div className="grid sm:grid-cols-3 gap-4 text-sm">
-            <div className="glass-card p-4"><p className="text-gray-400">Dataset</p><p className="font-semibold mt-1 break-all">{current.dataset}</p></div>
-            <div className="glass-card p-4"><p className="text-gray-400">Filas de origen</p><p className="font-semibold text-2xl mt-1">{current.rows?.toLocaleString("es-BO")}</p></div>
-            <div className="glass-card p-4"><p className="text-gray-400">Aeropuertos en matrices</p><p className="font-semibold text-2xl mt-1">{current.airports}</p></div>
-          </div>{current.last_import && <p className="text-sm text-gray-400 mt-4">Última carga: {new Date(current.last_import.updated_at).toLocaleString("es-BO")} · {current.last_import.files.join(" · ")}</p>}</>
-        ) : <p className="text-gray-400">Cargando información actual…</p>}
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="card card-body"><p className="text-sm text-slate-500">Dataset</p><p className="mt-1 break-all font-mono text-sm font-semibold text-navy-900">{current.dataset}</p></div>
+              <KpiCard label="Filas de origen" value={current.rows?.toLocaleString("es-BO")} />
+              <KpiCard label="Aeropuertos en matrices" value={current.airports} />
+            </div>
+            {current.last_import && <p className="mt-3 text-sm text-slate-500">Última carga: {new Date(current.last_import.updated_at).toLocaleString("es-BO")} · {current.last_import.files.join(" · ")}</p>}
+          </>
+        ) : <p className="text-slate-500">Cargando información actual…</p>}
       </section>
 
-      <section className="glass-panel p-6">
-        <h3 className="font-semibold text-xl flex items-center gap-2"><UploadCloud className="w-5 h-5 text-blue-400" /> Seleccionar archivos</h3>
-        <p className="text-gray-400 text-sm mt-2 mb-5">Para Excel de matrices, pon los aeropuertos de destino en la primera fila y los de origen en la primera columna. Las celdas contienen horas o precios. Solo necesitas seleccionar lo que deseas cambiar.</p>
-        <div className="grid lg:grid-cols-2 gap-4">
-          {fields.map((field) => (
-            <label key={field.key} className="glass-card p-4 block cursor-pointer hover:border-blue-400/50 transition">
-              <span className="flex items-center gap-2 font-semibold"><FileSpreadsheet className="w-4 h-4 text-blue-400" />{field.title}</span>
-              <span className="block text-xs text-gray-400 mt-1 min-h-8">{field.help}</span>
-              <input type="file" accept={field.accept} disabled={running || busy} className="mt-3 block w-full text-sm text-gray-300 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-500/20 file:px-3 file:py-2 file:text-blue-200 hover:file:bg-blue-500/30" onChange={(event) => {
-                const selected = event.target.files?.[0];
-                setFiles((previous) => ({ ...previous, [field.key]: selected }));
-                setJob(null);
-                window.localStorage.removeItem("airres-input-job");
-              }} />
-              {files[field.key] && <span className="text-xs text-emerald-300 block mt-2">{files[field.key]?.name}</span>}
-            </label>
-          ))}
+      <section className="card card-body">
+        <h2 className="section-title flex items-center gap-2"><UploadCloud className="h-5 w-5 text-navy-500" /> Seleccionar archivos</h2>
+        <p className="section-subtitle mb-5">Para Excel de matrices, pon los aeropuertos de destino en la primera fila y los de origen en la primera columna. Las celdas contienen horas o precios. Solo necesitas seleccionar lo que deseas cambiar.</p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {fields.map((field) => {
+            const chosen = files[field.key];
+            return <label key={field.key} className={`block cursor-pointer rounded-2xl border-2 border-dashed p-4 transition ${chosen ? "border-emerald-300 bg-emerald-50/60" : "border-slate-200 hover:border-navy-300 hover:bg-navy-50/40"}`}>
+              <span className="flex items-center gap-2 font-semibold text-navy-900">
+                {chosen ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <FileSpreadsheet className="h-4 w-4 text-navy-500" />}{field.title}
+              </span>
+              <span className="mt-1 block min-h-8 text-xs text-slate-500">{field.help}</span>
+              <input type="file" accept={field.accept} disabled={running || busy}
+                className="mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-navy-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-navy-700"
+                onChange={(event) => {
+                  const selected = event.target.files?.[0];
+                  setFiles((previous) => ({ ...previous, [field.key]: selected }));
+                  setJob(null);
+                  window.localStorage.removeItem("airres-input-job");
+                }} />
+              {chosen && <span className="mt-2 block text-xs font-medium text-emerald-700">{chosen.name}</span>}
+            </label>;
+          })}
         </div>
-        <p className="text-xs text-gray-500 mt-4">Los aeropuertos de las matrices deben tener región, país y zona horaria en el catálogo actual. La vista previa cuenta como no importables las filas con fecha, avión o ruta no válidos.</p>
-        <button onClick={preview} disabled={!selectedCount || busy || running} className="btn-primary mt-6 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />} Validar y preparar
+        <p className="mt-4 text-xs text-slate-500">Los aeropuertos de las matrices deben tener región, país y zona horaria en el catálogo actual. La vista previa cuenta como no importables las filas con fecha, avión o ruta no válidos.</p>
+        <button onClick={preview} disabled={!selectedCount || busy || running} className="btn-primary mt-5">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />} Validar y preparar
         </button>
       </section>
 
-      {error && <div role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-red-200">{error}</div>}
+      {error && <div role="alert" className="alert alert-error">{error}</div>}
 
-      {job && <section className="glass-panel p-6 space-y-5">
+      {job && <section className="card card-body space-y-5">
         <div className="flex items-center gap-3">
-          {job.state === "completed" ? <CheckCircle2 className="text-emerald-400" /> : job.state === "failed" ? <AlertTriangle className="text-red-400" /> : <DatabaseZap className="text-blue-400" />}
-          <h3 className="text-xl font-semibold">{job.state === "preview" ? "Vista previa" : job.state === "running" ? "Procesando datos" : job.state === "completed" ? "Datos listos" : "Proceso interrumpido"}</h3>
+          <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${job.state === "completed" ? "bg-emerald-50 text-emerald-600" : job.state === "failed" ? "bg-red-50 text-red-600" : "bg-navy-50 text-navy-600"}`}>
+            {job.state === "completed" ? <CheckCircle2 /> : job.state === "failed" ? <AlertTriangle /> : <DatabaseZap />}
+          </span>
+          <div>
+            <h2 className="section-title">{job.state === "preview" ? "Vista previa" : job.state === "running" ? "Procesando datos" : job.state === "completed" ? "Datos listos" : "Proceso interrumpido"}</h2>
+            <p className="text-sm text-slate-500">{job.step}</p>
+          </div>
         </div>
-        <p className="text-gray-300">{job.step}</p>
-        {job.error && <p role="alert" className="text-red-300">{job.error}</p>}
-        <div className="grid sm:grid-cols-3 gap-3 text-sm">
-          <div className="glass-card p-3">Filas: <strong>{job.rows.toLocaleString("es-BO")}</strong></div>
-          <div className="glass-card p-3">Vuelos admitidos: <strong>{job.eligible.toLocaleString("es-BO")}</strong></div>
-          <div className="glass-card p-3">Filas no importables: <strong>{job.rejected.toLocaleString("es-BO")}</strong></div>
+        {job.error && <p role="alert" className="alert alert-error">{job.error}</p>}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">Filas: <strong className="block text-2xl text-navy-900">{job.rows.toLocaleString("es-BO")}</strong></div>
+          <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Vuelos admitidos: <strong className="block text-2xl">{job.eligible.toLocaleString("es-BO")}</strong></div>
+          <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Filas no importables: <strong className="block text-2xl">{job.rejected.toLocaleString("es-BO")}</strong></div>
         </div>
-        <ul className="text-sm text-gray-400 list-disc pl-5">{job.files.map((file) => <li key={file}>{file}</li>)}</ul>
+        <ul className="flex flex-wrap gap-2">{job.files.map((file) => <li key={file} className="badge badge-slate">{file}</li>)}</ul>
         {job.state !== "preview" && <div>
-          <div className="flex justify-between text-sm mb-2"><span>Progreso</span><span>{job.percent}%</span></div>
-          <div role="progressbar" aria-valuenow={job.percent} aria-valuemin={0} aria-valuemax={100} className="h-3 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-500" style={{ width: `${job.percent}%` }} /></div>
+          <div className="mb-2 flex justify-between text-sm font-medium text-slate-600"><span>Progreso</span><span>{job.percent}%</span></div>
+          <div role="progressbar" aria-valuenow={job.percent} aria-valuemin={0} aria-valuemax={100} className="h-3 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-gradient-to-r from-navy-700 to-gold-400 transition-all duration-500" style={{ width: `${job.percent}%` }} />
+          </div>
         </div>}
         {job.state === "preview" && <>
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">Al procesar se borrarán todos los vuelos, boletos y reservas anteriores. Los archivos actuales no se modifican durante esta vista previa.</div>
-          <button onClick={process} disabled={busy} className="btn-primary disabled:opacity-40">Procesar y reemplazar datos</button>
+          <div className="alert alert-warning"><AlertTriangle className="h-5 w-5 shrink-0" />Al procesar se borrarán todos los vuelos, boletos y reservas anteriores. Los archivos actuales no se modifican durante esta vista previa.</div>
+          <button onClick={process} disabled={busy} className="btn-primary">Procesar y reemplazar datos</button>
         </>}
-        {job.state === "completed" && <div className="text-emerald-300 text-sm space-y-2"><p>Importados: {job.america.toLocaleString("es-BO")} vuelos de América y {job.other.toLocaleString("es-BO")} de Europa/Asia. Ya puedes usar el sistema.</p><a className="text-blue-300 underline" href="/api/entradas/rechazos.csv">Descargar rechazos por ruta (CSV)</a></div>}
+        {job.state === "completed" && <div className="alert alert-success flex-col"><p>Importados: {job.america.toLocaleString("es-BO")} vuelos de América y {job.other.toLocaleString("es-BO")} de Europa/Asia. Ya puedes usar el sistema.</p><a className="font-semibold underline" href="/api/entradas/rechazos.csv">Descargar rechazos por ruta (CSV)</a></div>}
       </section>}
     </div>
   );

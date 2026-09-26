@@ -23,7 +23,7 @@ export default function QRNetworkInfo() {
   }, []);
 
   if (!address) return null;
-  return <p className={`mt-2 text-xs ${address.ready ? "text-emerald-200" : "text-amber-200"}`}>
+  return <p className={`mt-2 text-xs ${address.ready ? "text-emerald-700" : "text-amber-700"}`}>
     {address.ready ? <>Dirección actual del QR: <a className="underline" href={address.url} target="_blank" rel="noreferrer">{address.url}</a>. Abre esta dirección en el celular para comprobar que la red permite la conexión.</> : <>No se detectó una dirección accesible desde el celular. Inicia el proyecto con <code>scripts/start-project.ps1</code> y genera el QR de nuevo.</>}
   </p>;
 }

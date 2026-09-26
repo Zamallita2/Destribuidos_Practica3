@@ -77,21 +77,21 @@ export default function FlightMap() {
 
   if (loading) {
     return (
-      <div className="w-full h-96 rounded-xl bg-gradient-to-br from-blue-900/10 to-purple-900/10 border border-white/5 flex items-center justify-center">
-        <p className="text-gray-400">Cargando mapa en vivo...</p>
+      <div className="flex h-96 w-full animate-pulse items-center justify-center rounded-2xl bg-navy-900">
+        <p className="text-navy-200">Cargando mapa en vivo...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full rounded-xl border border-white/10 bg-black/40 overflow-hidden relative" style={{ height: "500px" }}>
-      <div className="absolute top-4 left-4 z-10 bg-black/60 p-3 rounded-lg border border-white/10 backdrop-blur-md">
-        <h4 className="text-sm font-bold text-white font-heading mb-2">Estado de Vuelos</h4>
-        <div className="space-y-1 text-xs">
-          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#facc15]" /> <span className="text-gray-300">Programado</span></div>
-          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#4ade80]" /> <span className="text-gray-300">En Vuelo</span></div>
-          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#a78bfa]" /> <span className="text-gray-300">Salida</span></div>
-          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#fb923c]" /> <span className="text-gray-300">Aterrizado</span></div>
+    <div className="relative h-[340px] w-full overflow-hidden rounded-2xl bg-navy-950 shadow-lift sm:h-[500px]">
+      <div className="absolute left-4 top-4 z-10 rounded-xl bg-white/95 p-3 shadow-lift">
+        <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-navy-900">Estado de Vuelos</h4>
+        <div className="space-y-1 text-xs text-slate-600">
+          <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-[#facc15]" /> <span>Programado</span></div>
+          <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-[#4ade80]" /> <span>En Vuelo</span></div>
+          <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-[#a78bfa]" /> <span>Salida</span></div>
+          <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-[#fb923c]" /> <span>Aterrizado</span></div>
         </div>
       </div>
 
@@ -108,12 +108,12 @@ export default function FlightMap() {
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
-                  fill="#1e3a8a" // dark blue background for map
-                  stroke="#172554" // darker stroke
+                  fill="#1B3A6B"
+                  stroke="#0B1D3A"
                   strokeWidth={0.5}
                   style={{
                     default: { outline: "none" },
-                    hover: { fill: "#1d4ed8", outline: "none" },
+                    hover: { fill: "#274C85", outline: "none" },
                     pressed: { outline: "none" },
                   }}
                 />
